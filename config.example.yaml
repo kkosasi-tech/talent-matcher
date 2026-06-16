@@ -1,0 +1,9 @@
+candidate:
+  name: "Jane Doe"
+  email: "jane@example.com"
+  phone: "+1 555 000 0000"
+  linkedin: "linkedin.com/in/janedoe/"
+
+pipeline:
+  threshold: 60          # minimum score (0-100) to generate outputs
+  model: "claude-sonnet-4-6"

@@ -1,0 +1,121 @@
+# Experience bank — your STAR stories, the single source of truth for all pipeline outputs.
+#
+# Copy this file to experience_bank.yaml and replace the examples with your real stories.
+# Each story is scored against job descriptions and used to generate tailored resumes,
+# cover letters, and gap analysis.
+#
+# Tips:
+#   - Write result/action in past tense with concrete metrics wherever possible
+#   - Tags drive keyword matching — include technologies, practices, and domain terms
+#   - seniority_signals help the scorer assess level fit
+#   - Add as many stories as you have; the matcher ranks them per JD automatically
+
+stories:
+  - id: monolith-migration-2023
+    title: Led monolith to microservices migration
+    company: Acme Corp
+    role: Senior Software Engineer
+    year: 2023
+    tags:
+      - architecture
+      - leadership
+      - microservices
+      - zero-downtime
+      - backend
+      - system-design
+      - cross-team
+    situation: >
+      Legacy monolith caused 8-hour deploy cycles, blocking 3 product teams from
+      shipping independently and creating a single point of failure for 500K users.
+    task: >
+      Architect and lead migration to microservices with a hard zero-downtime
+      constraint and a 6-month delivery timeline.
+    action: >
+      Designed strangler fig pattern for incremental migration. Built an internal
+      service mesh framework to reduce per-service boilerplate. Ran 12 onboarding
+      sessions across 4 teams to align on API contracts and observability standards.
+      Coordinated with platform team to deliver per-service CI/CD pipelines.
+    result: >
+      Deploy time dropped from 8 hours to 15 minutes. Team velocity increased 40%.
+      Pattern adopted company-wide by 2 additional departments within 6 months.
+    metrics:
+      - "Deploy time: 8h → 15min (94% reduction)"
+      - "Team velocity: +40%"
+      - "Adopted by 3 additional departments"
+    seniority_signals:
+      - led
+      - architected
+      - cross-team
+      - onboarding
+      - zero-downtime
+
+  - id: data-pipeline-2022
+    title: Built high-throughput event-driven data pipeline
+    company: Acme Corp
+    role: Senior Software Engineer
+    year: 2022
+    tags:
+      - data-engineering
+      - kafka
+      - performance
+      - reliability
+      - backend
+      - streaming
+      - go
+    situation: >
+      Product analytics relied on nightly batch jobs, making real-time insights
+      impossible and causing product decisions to be made on stale 24-hour-old data.
+    task: >
+      Design and deliver a real-time event pipeline to replace nightly batch processing,
+      targeting <100ms P99 latency at 2M events/day.
+    action: >
+      Chose Kafka for durable event streaming. Built consumer microservices in Go for
+      high throughput. Introduced dead-letter queue pattern for error recovery.
+      Set up Grafana dashboards and PagerDuty alerting. Wrote runbooks for on-call engineers.
+    result: >
+      Pipeline reached 2M events/day at 87ms P99 latency. Zero data loss over 14 months.
+      Batch jobs eliminated entirely.
+    metrics:
+      - "Throughput: 2M events/day"
+      - "Latency: 87ms P99 (target <100ms)"
+      - "Uptime: 99.97% over 14 months"
+    seniority_signals:
+      - designed
+      - delivered
+      - reliability
+      - on-call
+      - runbooks
+
+  - id: mentorship-2023
+    title: Mentored junior engineers to promotion
+    company: Acme Corp
+    role: Senior Software Engineer
+    year: 2023
+    tags:
+      - mentorship
+      - leadership
+      - people-development
+      - coaching
+      - code-review
+    situation: >
+      Engineering team grew rapidly from 8 to 22 engineers in 18 months;
+      4 junior engineers had no structured growth path or senior mentor.
+    task: >
+      Provide structured mentorship to 4 junior engineers with the goal of
+      accelerating their growth to mid-level.
+    action: >
+      Set up bi-weekly 1:1s with each engineer. Created personalised growth plans
+      tied to team goals. Provided detailed code reviews focused on principles over
+      correctness. Nominated engineers for stretch projects and presented their
+      work to leadership.
+    result: >
+      3 of 4 engineers promoted within 18 months; one to tech lead.
+      PR review turnaround improved from 3 days to 6 hours across the team.
+    metrics:
+      - "3 of 4 engineers promoted within 18 months"
+      - "PR review turnaround: 3 days → 6 hours"
+    seniority_signals:
+      - mentorship
+      - people-development
+      - leadership
+      - promotion

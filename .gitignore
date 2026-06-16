@@ -1,0 +1,34 @@
+# Personal data — copy the *.example.* files, remove .example, and fill in your own
+data/resume.md
+data/experience_bank.yaml
+config.yaml
+
+# Generated job outputs (cover letters, tailored resumes, gap analysis, etc.)
+jobs/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+dist/
+build/
+wheels/
+*.egg-info/
+.eggs/
+
+# Env / secrets
+.env
+.env.*
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
+uv.lock

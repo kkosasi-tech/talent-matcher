@@ -1,0 +1,25 @@
+{{ date }}
+
+{% if hiring_manager %}Dear {{ hiring_manager }},{% else %}Dear Hiring Manager,{% endif %}
+
+{{ opening_hook }}
+
+{{ fit_statement }}
+
+{{ star_paragraph_1 }}
+
+{% if star_paragraph_2 %}
+{{ star_paragraph_2 }}
+
+{% endif %}
+{% if referral_name %}
+I was referred by {{ referral_name }}{% if referral_context %}, who suggested my background in {{ referral_context }} would be a strong fit{% endif %}.
+
+{% endif %}
+{{ closing }}
+
+Sincerely,
+{{ candidate_name }}
+{{ candidate_email }}
+{{ candidate_phone }}
+{% if candidate_linkedin %}{{ candidate_linkedin }}{% endif %}

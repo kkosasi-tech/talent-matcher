@@ -1,0 +1,101 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Pipeline (example JD)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/pipeline.py",
+      "args": [
+        "--jd", "${workspaceFolder}/jobs/example_jd.txt"
+      ],
+      "env": {
+        "ANTHROPIC_API_KEY": "${env:ANTHROPIC_API_KEY}"
+      },
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Run Pipeline (prompt for JD path)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/pipeline.py",
+      "args": [
+        "--jd", "${input:jdPath}"
+      ],
+      "env": {
+        "ANTHROPIC_API_KEY": "${env:ANTHROPIC_API_KEY}"
+      },
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Run Pipeline (with hiring manager)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/pipeline.py",
+      "args": [
+        "--jd", "${input:jdPath}",
+        "--hiring-manager", "${input:hiringManager}"
+      ],
+      "env": {
+        "ANTHROPIC_API_KEY": "${env:ANTHROPIC_API_KEY}"
+      },
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Debug: JD Parser only",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "agents.jd_parser",
+      "env": {
+        "ANTHROPIC_API_KEY": "${env:ANTHROPIC_API_KEY}"
+      },
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Debug: Story Matcher only",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "agents.story_matcher",
+      "env": {
+        "ANTHROPIC_API_KEY": "${env:ANTHROPIC_API_KEY}"
+      },
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Debug: Cover Letter only",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "agents.cover_letter",
+      "env": {
+        "ANTHROPIC_API_KEY": "${env:ANTHROPIC_API_KEY}"
+      },
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ],
+  "inputs": [
+    {
+      "id": "jdPath",
+      "type": "promptString",
+      "description": "Path to job description .txt file",
+      "default": "jobs/example_jd.txt"
+    },
+    {
+      "id": "hiringManager",
+      "type": "promptString",
+      "description": "Hiring manager name (optional)",
+      "default": ""
+    }
+  ]
+}
