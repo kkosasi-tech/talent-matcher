@@ -1,4 +1,5 @@
 import anthropic
+from config import get_anthropic_api_key
 from models.schemas import MatchResult, Score
 from models.utils import parse_json_response
 
@@ -31,7 +32,7 @@ Respond ONLY with the JSON object."""
 
 
 def score_match(match: MatchResult, threshold: int = THRESHOLD) -> Score:
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
     story_summaries = "\n".join(
         f"- [{s.relevance_score:.2f}] {s.story_title}: {s.star_summary}"
