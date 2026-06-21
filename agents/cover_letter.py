@@ -2,6 +2,7 @@ from datetime import date
 from pathlib import Path
 import anthropic
 from jinja2 import Environment, FileSystemLoader
+from config import get_anthropic_api_key
 from models.schemas import MatchResult, Score, CoverLetterSlots, CoverLetterContext
 from models.utils import parse_json_response
 
@@ -34,7 +35,7 @@ Respond ONLY with the JSON object."""
 
 
 def _generate_slots(match: MatchResult, score: Score) -> CoverLetterSlots:
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
     star_stories = "\n".join(
         f"- {s.story_title} [{s.relevance_score:.2f}]: {s.star_summary}"

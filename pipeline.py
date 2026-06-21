@@ -17,23 +17,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
 
-import yaml
+from config import load_config
 
 from agents.cover_letter import generate_cover_letter
 from agents.gap_analyzer import analyze_gaps
 from agents.jd_parser import parse_jd
+from agents.cover_letter_docx import markdown_to_docx as cover_letter_to_docx
+from agents.resume_docx import markdown_to_docx as resume_to_docx
 from agents.resume_tailor import tailor_resume
+from agents.salary_researcher import render_compensation_md, research_compensation
 from agents.scorer import score_match
 from agents.story_matcher import match_stories
 from models.schemas import PipelineResult
-
-CONFIG_PATH = Path(__file__).parent / "config.yaml"
-
-
-def _load_config() -> dict:
-    with open(CONFIG_PATH) as f:
-        return yaml.safe_load(f)
-
 
 def _make_job_dir(company: str, role: str, score: int) -> Path:
     slug = f"{company}-{role}-score{score}-{date.today().isoformat()}"
@@ -50,7 +45,7 @@ def run(
     referral_context: str | None = None,
     threshold: int | None = None,
 ) -> PipelineResult:
-    cfg = _load_config()
+    cfg = load_config()
     candidate = cfg["candidate"]
     candidate_name = candidate["name"]
     candidate_email = candidate["email"]
@@ -78,6 +73,22 @@ def run(
     (job_dir / "score.json").write_text(score.model_dump_json(indent=2))
     print(f"    Output dir: {job_dir}")
 
+    print("==> Researching compensation & eligibility restrictions...")
+    if parsed_jd.salary_advertised:
+        print(f"    Salary advertised in JD: {parsed_jd.salary_advertised}")
+    else:
+        print("    No salary in JD — searching the web for a typical range...")
+    try:
+        compensation = research_compensation(parsed_jd)
+        (job_dir / "compensation.json").write_text(compensation.model_dump_json(indent=2))
+        (job_dir / "compensation.md").write_text(render_compensation_md(compensation))
+        print(f"    {compensation.salary_advertised or compensation.estimated_range or 'no estimate'}")
+        if compensation.restrictions:
+            print(f"    Restrictions: {', '.join(compensation.restrictions)}")
+    except Exception as e:
+        compensation = None
+        print(f"    WARNING: compensation research failed: {e}")
+
     if not score.proceed:
         print(f"\n  Score {score.overall} is below threshold {threshold}. Stopping pipeline.")
         print("  Run with --threshold lower to force generation, or address the gaps first.")
@@ -86,6 +97,7 @@ def run(
             parsed_jd=parsed_jd,
             matches=match,
             score=score,
+            compensation=compensation,
         )
 
     print("==> [4/5] Generating tailored resume, cover letter, gap analysis (parallel)...")
@@ -129,13 +141,18 @@ def run(
             print(f"    {name} done")
 
     (job_dir / "resume.md").write_text(tailored_resume)
+    resume_to_docx(tailored_resume, job_dir / "resume.docx")
     (job_dir / "cover_letter.md").write_text(cover_letter)
+    cover_letter_to_docx(cover_letter, job_dir / "cover_letter.docx")
     (job_dir / "gaps.json").write_text(gaps.model_dump_json(indent=2))
 
     print("==> [5/5] Done.")
     print(f"\nOutputs in {job_dir}/")
     print(f"  resume.md        — tailored resume")
+    print(f"  resume.docx      — tailored resume (Word)")
     print(f"  cover_letter.md  — cover letter")
+    print(f"  cover_letter.docx — cover letter (Word)")
+    print(f"  compensation.md  — salary estimate & eligibility restrictions")
     print(f"  gaps.json        — learning recommendations")
 
     return PipelineResult(
@@ -143,6 +160,7 @@ def run(
         parsed_jd=parsed_jd,
         matches=match,
         score=score,
+        compensation=compensation,
         tailored_resume=tailored_resume,
         cover_letter=cover_letter,
         gaps=gaps,

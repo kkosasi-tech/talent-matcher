@@ -1,4 +1,5 @@
 import anthropic
+from config import get_anthropic_api_key
 from models.schemas import ParsedJD
 from models.utils import parse_json_response
 
@@ -16,7 +17,11 @@ PROMPT = """Parse this job description and return a JSON object with these field
 - seniority_level: one of "junior", "mid", "senior", "staff", "principal"
 - domain: one of "backend", "frontend", "fullstack", "data", "ml", "devops", "mobile", "other"
 - keywords: array of strings (important domain terms, technologies, methodologies)
-- raw_text: the full original text
+- location: string or null (work location, city/state, or "Remote" if stated; null if not mentioned)
+- salary_advertised: string or null (the compensation/salary range ONLY if it is explicitly stated in the JD, e.g. "$160,000 - $200,000"; null if the JD does not state any salary)
+- restrictions: array of strings (eligibility restrictions explicitly stated, e.g. "US Citizenship required", "Must be eligible for security clearance", "No visa sponsorship", "Onsite only"; empty array if none stated)
+
+Do not include a raw_text field.
 
 Job Description:
 ---
@@ -27,11 +32,11 @@ Respond ONLY with the JSON object, no markdown fences."""
 
 
 def parse_jd(jd_text: str) -> ParsedJD:
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
     with client.messages.stream(
         model=MODEL,
-        max_tokens=2048,
+        max_tokens=4096,
         system=SYSTEM,
         messages=[{"role": "user", "content": PROMPT.format(jd_text=jd_text)}],
     ) as stream:

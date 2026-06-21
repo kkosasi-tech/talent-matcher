@@ -1,6 +1,7 @@
 import yaml
 from pathlib import Path
 import anthropic
+from config import get_anthropic_api_key
 from models.schemas import ParsedJD, StoryMatch, MatchResult
 from models.utils import parse_json_response
 
@@ -45,7 +46,7 @@ def match_stories(jd: ParsedJD, bank_path: Path | None = None) -> MatchResult:
         bank_path = Path(__file__).parent.parent / "data" / "experience_bank.yaml"
 
     stories = _load_stories(bank_path)
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
     prompt = PROMPT.format(
         role=jd.role,

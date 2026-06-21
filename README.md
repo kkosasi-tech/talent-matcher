@@ -124,14 +124,23 @@ Each run creates a folder under `jobs/`:
 
 ```
 jobs/acme-corp-senior-backend-engineer-score82-2026-06-16/
-  jd.txt            original job description
-  parsed_jd.json    structured extraction of the JD
-  matches.json      STAR stories ranked by relevance
-  score.json        fit scores (overall, skill_match, experience_relevance, seniority_fit)
-  resume.md         tailored resume
-  cover_letter.md   generated cover letter
-  gaps.json         missing/partial skills + specific learning resources
+  jd.txt              original job description
+  parsed_jd.json      structured extraction of the JD
+  matches.json        STAR stories ranked by relevance
+  score.json          fit scores (overall, skill_match, experience_relevance, seniority_fit)
+  compensation.md     salary (advertised, or web-researched if not) + eligibility restrictions
+  compensation.json   same data, structured
+  resume.md           tailored resume
+  resume.docx         tailored resume (Word)
+  cover_letter.md     generated cover letter
+  cover_letter.docx   generated cover letter (Word)
+  gaps.json           missing/partial skills + specific learning resources
 ```
+
+Compensation research runs right after scoring, regardless of whether the score clears
+`threshold` — so you always know the pay range and any eligibility restrictions (US
+Citizenship, security clearance, no visa sponsorship, onsite-only, etc.) even for roles
+you decide not to pursue.
 
 If the fit score is below `threshold`, the pipeline stops after scoring and skips generating outputs.
 
@@ -155,8 +164,11 @@ talent-matcher/
     jd_parser.py               extracts structured data from the JD
     story_matcher.py           scores each STAR story against the JD
     scorer.py                  produces 0–100 fit score with rationale
+    salary_researcher.py       reports advertised salary, or web-researches a range; surfaces eligibility restrictions
     resume_tailor.py           rewrites resume for the role (no fabrication)
+    resume_docx.py             renders tailored resume markdown to .docx
     cover_letter.py            LLM fills slots → Jinja renders final letter
+    cover_letter_docx.py       renders cover letter markdown to .docx
     gap_analyzer.py            missing/partial skills + learning resources
   models/
     schemas.py                 Pydantic types for all pipeline data

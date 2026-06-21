@@ -1,5 +1,6 @@
 from pathlib import Path
 import anthropic
+from config import get_anthropic_api_key
 from models.schemas import MatchResult, Score
 
 MODEL = "claude-sonnet-4-6"
@@ -37,7 +38,7 @@ def tailor_resume(
         resume_path = Path(__file__).parent.parent / "data" / "resume.md"
 
     resume_text = resume_path.read_text()
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
     top_stories = "\n".join(
         f"- {s.story_title} (matched: {', '.join(s.matched_keywords[:4])})"

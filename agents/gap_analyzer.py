@@ -1,6 +1,7 @@
 from pathlib import Path
 import yaml
 import anthropic
+from config import get_anthropic_api_key
 from models.schemas import MatchResult, Score, GapAnalysis
 from models.utils import parse_json_response
 
@@ -64,7 +65,7 @@ def analyze_gaps(match: MatchResult, score: Score, bank_path: Path | None = None
     resume_text = resume_path.read_text()
     all_skills = _all_story_skills(bank_path)
 
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
     prompt = PROMPT.format(
         role=match.jd.role,

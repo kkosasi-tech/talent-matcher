@@ -1,3 +1,6 @@
+anthropic:
+  api_key: "sk-ant-..."
+
 candidate:
   name: "Jane Doe"
   email: "jane@example.com"
