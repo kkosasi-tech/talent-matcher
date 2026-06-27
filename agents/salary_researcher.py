@@ -12,11 +12,9 @@ the report so they surface in one place alongside compensation.
 
 import anthropic
 
-from config import get_anthropic_api_key
+from config import get_anthropic_api_key, get_model
 from models.schemas import CompensationReport, ParsedJD
 from models.utils import parse_json_response
-
-MODEL = "claude-sonnet-4-6"
 
 SYSTEM = """You are a compensation research analyst. You estimate realistic market salary
 ranges for software roles using current web sources (Levels.fyi, Glassdoor, Built In,
@@ -60,7 +58,7 @@ def _research_market_range(jd: ParsedJD) -> dict:
     )
 
     with client.messages.stream(
-        model=MODEL,
+        model=get_model(),
         max_tokens=3072,
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],

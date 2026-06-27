@@ -1,9 +1,7 @@
 from pathlib import Path
 import anthropic
-from config import get_anthropic_api_key
+from config import get_anthropic_api_key, get_model
 from models.schemas import MatchResult, Score
-
-MODEL = "claude-sonnet-4-6"
 
 SYSTEM = """You are an expert resume writer. You tailor resumes to specific job descriptions
 without fabricating experience. You reorder, emphasize, and reword existing content only."""
@@ -54,7 +52,7 @@ def tailor_resume(
     )
 
     with client.messages.stream(
-        model=MODEL,
+        model=get_model(),
         max_tokens=4096,
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],

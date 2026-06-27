@@ -80,6 +80,20 @@ class CompensationReport(BaseModel):
     restrictions: list[str] = Field(default_factory=list)  # citizenship / clearance / work-auth limits
 
 
+class InterviewQuestion(BaseModel):
+    category: str  # behavioral / technical / situational / culture_fit
+    question: str
+    sample_answer: str
+    tips: list[str]
+
+
+class InterviewPrep(BaseModel):
+    role: str
+    company: str
+    seniority_level: str
+    questions: list[InterviewQuestion]
+
+
 class PipelineResult(BaseModel):
     job_dir: str
     parsed_jd: ParsedJD
@@ -89,3 +103,4 @@ class PipelineResult(BaseModel):
     tailored_resume: Optional[str] = None
     cover_letter: Optional[str] = None
     gaps: Optional[GapAnalysis] = None
+    interview_prep: Optional[InterviewPrep] = None

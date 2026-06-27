@@ -1,12 +1,13 @@
 # talent-matcher
 
-Automated job application pipeline. Paste a job description, get a tailored resume, cover letter, and gap analysis — all grounded in your own STAR stories.
+Automated job application pipeline. Paste a job description, get a tailored resume, cover letter, gap analysis, and mock interview prep — all grounded in your own STAR stories.
 
 ```
-JD Parser → Story Matcher → Scorer
-                                 └─(score ≥ threshold)─┬─ Resume Tailor  ┐
-                                                        ├─ Cover Letter   ├─ jobs/<output-dir>/
-                                                        └─ Gap Analyzer   ┘
+JD Parser → Story Matcher → Scorer → Salary Researcher
+                                   └─(score ≥ threshold)─┬─ Resume Tailor    ┐
+                                                          ├─ Cover Letter     │
+                                                          ├─ Gap Analyzer     ├─ jobs/<output-dir>/
+                                                          └─ Interview Prep   ┘
 ```
 
 Uses [Claude](https://anthropic.com) via the Anthropic Python SDK. Each run costs roughly $0.01–0.05 depending on the size of your experience bank.
@@ -39,7 +40,15 @@ Outputs land in `jobs/<company>-<role>-score<N>-<date>/`.
 
 ## Setup
 
-### 1. `config.yaml`
+### 1. API key
+
+The pipeline reads your Anthropic API key from the `ANTHROPIC_API_KEY` environment variable (recommended), or from `anthropic.api_key` in `config.yaml` as a fallback.
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### 2. `config.yaml`
 
 Copy `config.example.yaml` → `config.yaml` and fill in your details:
 
@@ -51,21 +60,22 @@ candidate:
   linkedin: "linkedin.com/in/yourprofile/"
 
 pipeline:
-  threshold: 60       # minimum fit score (0–100) required to generate outputs
-  model: "claude-sonnet-4-6"
+  threshold: 60              # minimum fit score (0–100) required to generate outputs
+  model: "claude-sonnet-4-6" # Claude model used by all agents
+  top_stories: 3             # number of top STAR stories passed into each prompt
 ```
 
 `config.yaml` is gitignored — your personal info never leaves your machine.
 
-### 2. `data/resume.md`
+### 3. `data/resume.md`
 
 Copy `data/resume.example.md` → `data/resume.md` and replace with your actual resume in Markdown. The resume tailor agent rewrites this file for each application without fabricating experience.
 
-### 3. `data/experience_bank.yaml`
+### 4. `data/experience_bank.yaml`
 
 Copy `data/experience_bank.example.yaml` → `data/experience_bank.yaml` and replace the examples with your real STAR stories.
 
-This is the **single source of truth** for all pipeline outputs. The same stories power resume bullets, cover letter paragraphs, and interview prep. The more stories you add, the better the matching.
+This is the **single source of truth** for all pipeline outputs. The same stories power resume bullets, cover letter paragraphs, gap analysis, and interview prep. The more stories you add, the better the matching.
 
 Each story follows this structure:
 
@@ -124,25 +134,28 @@ Each run creates a folder under `jobs/`:
 
 ```
 jobs/acme-corp-senior-backend-engineer-score82-2026-06-16/
-  jd.txt              original job description
-  parsed_jd.json      structured extraction of the JD
-  matches.json        STAR stories ranked by relevance
-  score.json          fit scores (overall, skill_match, experience_relevance, seniority_fit)
-  compensation.md     salary (advertised, or web-researched if not) + eligibility restrictions
-  compensation.json   same data, structured
-  resume.md           tailored resume
-  resume.docx         tailored resume (Word)
-  cover_letter.md     generated cover letter
-  cover_letter.docx   generated cover letter (Word)
-  gaps.json           missing/partial skills + specific learning resources
+  jd.txt                  original job description
+  parsed_jd.json          structured extraction of the JD
+  matches.json            STAR stories ranked by relevance
+  score.json              fit scores (overall, skill_match, experience_relevance, seniority_fit)
+  compensation.md         salary (advertised or web-researched) + eligibility restrictions
+  compensation.json       same data, structured
+  resume.md               tailored resume
+  resume.docx             tailored resume (Word)
+  cover_letter.md         generated cover letter
+  cover_letter.docx       generated cover letter (Word)
+  gaps.md                 skill gap learning plan (missing skills, resources, priority order)
+  gaps.json               same data, structured
+  interview_prep.md       mock interview questions & sample answers
+  interview_prep.docx     interview prep (Word)
+  interview_prep.json     same data, structured
 ```
 
-Compensation research runs right after scoring, regardless of whether the score clears
-`threshold` — so you always know the pay range and any eligibility restrictions (US
-Citizenship, security clearance, no visa sponsorship, onsite-only, etc.) even for roles
-you decide not to pursue.
+**Compensation research** runs right after scoring regardless of whether the score clears `threshold` — so you always know the pay range and any eligibility restrictions (US Citizenship, security clearance, no visa sponsorship, onsite-only, etc.) even for roles you decide not to pursue.
 
-If the fit score is below `threshold`, the pipeline stops after scoring and skips generating outputs.
+**Interview prep** is calibrated to the JD's seniority level and the candidate's specific fit gaps. Questions span four categories: behavioral (STAR format), technical (depth matched to level), situational, and culture/fit. Sample answers are grounded in the candidate's actual experience from the resume and STAR stories.
+
+If the fit score is below `threshold`, the pipeline stops after compensation research and skips generating outputs.
 
 ---
 
@@ -164,12 +177,13 @@ talent-matcher/
     jd_parser.py               extracts structured data from the JD
     story_matcher.py           scores each STAR story against the JD
     scorer.py                  produces 0–100 fit score with rationale
-    salary_researcher.py       reports advertised salary, or web-researches a range; surfaces eligibility restrictions
+    salary_researcher.py       reports advertised salary or web-researches a range; surfaces eligibility restrictions
     resume_tailor.py           rewrites resume for the role (no fabrication)
-    resume_docx.py             renders tailored resume markdown to .docx
+    resume_docx.py             renders markdown to .docx (used by resume and interview prep)
     cover_letter.py            LLM fills slots → Jinja renders final letter
     cover_letter_docx.py       renders cover letter markdown to .docx
-    gap_analyzer.py            missing/partial skills + learning resources
+    gap_analyzer.py            missing/partial skills + prioritised learning resources
+    interview_prep.py          mock questions & sample answers calibrated to seniority and fit gaps
   models/
     schemas.py                 Pydantic types for all pipeline data
     utils.py                   shared JSON parsing helper
@@ -181,7 +195,7 @@ talent-matcher/
 ## Requirements
 
 - Python 3.11+
-- `ANTHROPIC_API_KEY` environment variable
+- `ANTHROPIC_API_KEY` environment variable (or set in `config.yaml`)
 - See `requirements.txt` for package dependencies
 
 ---
