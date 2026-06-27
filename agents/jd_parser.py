@@ -1,9 +1,7 @@
 import anthropic
-from config import get_anthropic_api_key
+from config import get_anthropic_api_key, get_model
 from models.schemas import ParsedJD
 from models.utils import parse_json_response
-
-MODEL = "claude-sonnet-4-6"
 
 SYSTEM = """You are a job description parser. Extract structured information from job descriptions.
 Always respond with valid JSON matching the specified schema exactly."""
@@ -35,7 +33,7 @@ def parse_jd(jd_text: str) -> ParsedJD:
     client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
     with client.messages.stream(
-        model=MODEL,
+        model=get_model(),
         max_tokens=4096,
         system=SYSTEM,
         messages=[{"role": "user", "content": PROMPT.format(jd_text=jd_text)}],
