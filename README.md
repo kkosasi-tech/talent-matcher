@@ -98,6 +98,10 @@ Tips:
 - `tags` drive keyword matching — include technologies, practices, and domain terms
 - `seniority_signals` help the scorer assess level fit
 - Add as many stories as you have; the matcher ranks them per JD
+- Write full detail into `situation`/`action`/`result` even if it's more than you'd put on a resume —
+  `resume_matcher` reads the whole story bank, not just `resume.md`. A skill only mentioned here (e.g.
+  a specific tool or environment used) is still counted as matched and surfaced to `resume_tailor` as
+  a `recoverable_skill`, instead of being wrongly flagged as missing just because it isn't on the resume
 
 ---
 
@@ -167,7 +171,8 @@ jobs/acme-corp-senior-backend-engineer-score82-2026-06-16/
   parsed_jd.json      structured extraction of the JD
   matches.json        STAR stories ranked by relevance
   match_report.json   resume vs. JD match: soft/hard skills, keywords, job title, degree,
-                       resume word count (target 500-700), accomplishments check, missing skills
+                       resume word count (target 500-700), accomplishments check, missing skills,
+                       and recoverable_skills (demonstrated in your STAR stories but not yet on the resume)
   score.json          fit scores (overall, skill_match, experience_relevance, seniority_fit,
                        resume_quality, missing_skills)
   compensation.md     salary (advertised, or web-researched if not) + eligibility restrictions
@@ -208,10 +213,10 @@ talent-matcher/
     jd_fetcher.py              posting URL → JD text (ATS public APIs, JSON-LD fallback)
     jd_parser.py               extracts structured data from the JD
     story_matcher.py           scores each STAR story against the JD
-    resume_matcher.py          matches resume vs. JD by category (skills/keywords/title/degree), checks word count + accomplishments
+    resume_matcher.py          matches resume vs. JD by category (skills/keywords/title/degree), checks word count + accomplishments, cross-references the STAR story bank for skills the resume omits
     scorer.py                  produces 0–100 fit score with rationale, informed by the resume match report
     salary_researcher.py       reports advertised salary, or web-researches a range; surfaces eligibility restrictions
-    resume_tailor.py           rewrites resume for the role (no fabrication)
+    resume_tailor.py           rewrites resume for the role (no fabrication beyond what's evidenced in the resume or story bank)
     resume_docx.py             renders tailored resume markdown to .docx
     cover_letter.py            LLM fills slots → Jinja renders final letter
     cover_letter_docx.py       renders cover letter markdown to .docx
@@ -239,4 +244,4 @@ A `.vscode/launch.json` is included with run configurations:
 - **Run Pipeline (example JD)** — hardcoded path, just press F5
 - **Run Pipeline (prompt for JD path)** — prompts for path at launch
 - **Run Pipeline (with hiring manager)** — prompts for path + manager name
-- **Debug: JD Parser / Story Matcher / Cover Letter** — run individual agents in isolation
+- **Debug: JD Parser / Story Matcher / Resume Matcher / Cover Letter** — run individual agents in isolation
