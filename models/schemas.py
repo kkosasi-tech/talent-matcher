@@ -32,11 +32,40 @@ class MatchResult(BaseModel):
     top_stories: list[StoryMatch]  # top 3 by relevance_score
 
 
+class CategoryMatch(BaseModel):
+    score: int = Field(ge=0, le=100)
+    matched: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+    notes: str = ""
+
+
+class RecoverableSkill(BaseModel):
+    skill: str
+    evidence: str  # what the story text actually says that demonstrates this skill
+    story_id: str  # id of the grounding STAR story
+
+
+class MatchReport(BaseModel):
+    soft_skills: CategoryMatch
+    hard_skills: CategoryMatch
+    keywords: CategoryMatch
+    job_title_match: CategoryMatch
+    degree_match: CategoryMatch
+    resume_word_count: int
+    resume_word_count_ok: bool  # True if 500-700 words
+    accomplishments_present: bool
+    accomplishments_notes: str
+    missing_skills: list[str] = Field(default_factory=list)  # union of hard/soft/keyword gaps, evidenced nowhere
+    recoverable_skills: list[RecoverableSkill] = Field(default_factory=list)  # demonstrated in stories, absent from resume text
+
+
 class Score(BaseModel):
     overall: int = Field(ge=0, le=100)
     skill_match: int = Field(ge=0, le=100)
     experience_relevance: int = Field(ge=0, le=100)
     seniority_fit: int = Field(ge=0, le=100)
+    resume_quality: int = Field(ge=0, le=100)  # resume length + accomplishments
+    missing_skills: list[str] = Field(default_factory=list)
     rationale: str
     proceed: bool  # True if overall >= threshold
 
@@ -98,6 +127,7 @@ class PipelineResult(BaseModel):
     job_dir: str
     parsed_jd: ParsedJD
     matches: MatchResult
+    match_report: MatchReport
     score: Score
     compensation: Optional[CompensationReport] = None
     tailored_resume: Optional[str] = None

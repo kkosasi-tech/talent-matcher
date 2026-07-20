@@ -1,13 +1,14 @@
 from pathlib import Path
 import anthropic
 from config import get_anthropic_api_key, get_model
-from models.schemas import MatchResult, Score
+from models.schemas import MatchReport, MatchResult, Score
 
 SYSTEM = """You are an expert resume writer. You tailor resumes to specific job descriptions
 without fabricating experience. You reorder, emphasize, and reword existing content only."""
 
 PROMPT = """Tailor this resume for the target role. Rules:
-- Do NOT invent experience, skills, or metrics that don't exist in the original
+- Do NOT invent experience, skills, or metrics that don't exist in the original resume or in the
+  recoverable skills evidence below
 - Do NOT combine bullets since they may reflect diffeerent projects
 - Do NOT elevate experience and level too much
 - Reorder bullet points so the most JD-relevant ones appear first
@@ -18,7 +19,7 @@ PROMPT = """Tailor this resume for the target role. Rules:
 Target Role: {role} at {company}
 Key JD requirements: {required_skills}
 Top matched stories to emphasize: {top_stories}
-
+{recoverable_section}
 Original Resume:
 ---
 {resume_text}
@@ -26,10 +27,18 @@ Original Resume:
 
 Return ONLY the tailored resume in Markdown, no explanation."""
 
+RECOVERABLE_SECTION_TEMPLATE = """
+Skills genuinely demonstrated in the candidate's STAR story bank but missing from the resume text —
+weave these in truthfully (e.g. into the skills line or a relevant bullet), strictly limited to what
+the evidence actually supports, do not overstate beyond it:
+{recoverable_lines}
+"""
+
 
 def tailor_resume(
     match: MatchResult,
     score: Score,
+    match_report: MatchReport | None = None,
     resume_path: Path | None = None,
 ) -> str:
     if resume_path is None:
@@ -43,11 +52,20 @@ def tailor_resume(
         for s in match.top_stories
     )
 
+    recoverable_section = ""
+    if match_report and match_report.recoverable_skills:
+        recoverable_lines = "\n".join(
+            f"- {r.skill}: {r.evidence} (from story: {r.story_id})"
+            for r in match_report.recoverable_skills
+        )
+        recoverable_section = RECOVERABLE_SECTION_TEMPLATE.format(recoverable_lines=recoverable_lines)
+
     prompt = PROMPT.format(
         role=match.jd.role,
         company=match.jd.company,
         required_skills=", ".join(match.jd.required_skills[:8]),
         top_stories=top_stories,
+        recoverable_section=recoverable_section,
         resume_text=resume_text,
     )
 

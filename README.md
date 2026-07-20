@@ -3,11 +3,12 @@
 Automated job application pipeline. Paste a job description, get a tailored resume, cover letter, gap analysis, and mock interview prep — all grounded in your own STAR stories.
 
 ```
-JD Parser → Story Matcher → Scorer → Salary Researcher
-                                   └─(score ≥ threshold)─┬─ Resume Tailor    ┐
-                                                          ├─ Cover Letter     │
-                                                          ├─ Gap Analyzer     ├─ jobs/<output-dir>/
-                                                          └─ Interview Prep   ┘
+URL/file → JD Fetcher → Keyword Prefilter (free) → JD Parser → Story Matcher → Resume Matcher → Scorer → Salary Researcher
+                              │                                                                              ├─(score < threshold)── jobs/no/
+                              └─(too few keyword matches)── jobs/no/                                         └─(score ≥ threshold)─┬─ Resume Tailor    ┐
+                                                                                                                                     ├─ Cover Letter     │
+                                                                                                                                     ├─ Gap Analyzer      ├─ jobs/<output-dir>/
+                                                                                                                                     └─ Interview Prep    ┘
 ```
 
 Uses [Claude](https://anthropic.com) via the Anthropic Python SDK. Each run costs roughly $0.01–0.05 depending on the size of your experience bank.
@@ -107,6 +108,10 @@ Tips:
 - `tags` drive keyword matching — include technologies, practices, and domain terms
 - `seniority_signals` help the scorer assess level fit
 - Add as many stories as you have; the matcher ranks them per JD
+- Write full detail into `situation`/`action`/`result` even if it's more than you'd put on a resume —
+  `resume_matcher` reads the whole story bank, not just `resume.md`. A skill only mentioned here (e.g.
+  a specific tool or environment used) is still counted as matched and surfaced to `resume_tailor` as
+  a `recoverable_skill`, instead of being wrongly flagged as missing just because it isn't on the resume
 
 ---
 
@@ -115,6 +120,11 @@ Tips:
 ```bash
 # Basic run
 python pipeline.py --jd path/to/job.txt
+
+# Straight from a posting URL — Greenhouse, Lever, Ashby, SmartRecruiters and
+# Workable via their official public APIs; any other page via its embedded
+# schema.org JobPosting JSON-LD (plain-text extraction as a last resort)
+python pipeline.py --url https://job-boards.greenhouse.io/acme/jobs/123
 
 # With hiring manager name (personalises cover letter salutation)
 python pipeline.py --jd path/to/job.txt --hiring-manager "Alex Smith"
@@ -128,6 +138,39 @@ python pipeline.py --jd path/to/job.txt \
 python pipeline.py --jd path/to/job.txt --threshold 45
 ```
 
+### Batch mode
+
+Point `batch.py` at several posting URLs and it fetches them in parallel,
+prefilters each against your experience-bank tags locally (zero tokens), tells
+you how many match, and — after you confirm — runs the matching ones through
+the pipeline in parallel:
+
+```bash
+python batch.py \
+  https://job-boards.greenhouse.io/acme/jobs/123 \
+  https://jobs.lever.co/someco/uuid-here
+
+# or from a file (one URL per line, # for comments)
+python batch.py --urls-file urls.txt
+
+# fetch + prefilter only, spend nothing
+python batch.py --urls-file urls.txt --dry-run
+
+# non-interactive (cron, scripts): --yes is required to spend tokens
+python batch.py --urls-file urls.txt --yes
+```
+
+Postings that fail the keyword prefilter are filed under `jobs/no/` immediately
+without any API calls. `prefilter.min_keyword_matches` and `batch.max_workers`
+in `config.yaml` control the cutoff and parallelism (`--min-matches` /
+`--workers` override per run).
+
+`urls.example.txt` documents the supported URL shapes with live examples. To
+*discover* postings automatically instead of hand-collecting URLs, use the
+companion [talent-dashboard](../talent-dashboard) project — its poller watches
+company boards and keyword-search APIs, and `poller.py --export-urls`
+regenerates `urls.txt` here from everything that cleared the prefilter.
+
 ### Output files
 
 Each run creates a folder under `jobs/`:
@@ -137,7 +180,11 @@ jobs/acme-corp-senior-backend-engineer-score82-2026-06-16/
   jd.txt                  original job description
   parsed_jd.json          structured extraction of the JD
   matches.json            STAR stories ranked by relevance
-  score.json              fit scores (overall, skill_match, experience_relevance, seniority_fit)
+  match_report.json       resume vs. JD match: soft/hard skills, keywords, job title, degree,
+                          resume word count (target 500-700), accomplishments check, missing skills,
+                          and recoverable_skills (demonstrated in your STAR stories but not yet on the resume)
+  score.json              fit scores (overall, skill_match, experience_relevance, seniority_fit,
+                          resume_quality, missing_skills)
   compensation.md         salary (advertised or web-researched) + eligibility restrictions
   compensation.json       same data, structured
   resume.md               tailored resume
@@ -155,7 +202,7 @@ jobs/acme-corp-senior-backend-engineer-score82-2026-06-16/
 
 **Interview prep** is calibrated to the JD's seniority level and the candidate's specific fit gaps. Questions span four categories: behavioral (STAR format), technical (depth matched to level), situational, and culture/fit. Sample answers are grounded in the candidate's actual experience from the resume and STAR stories.
 
-If the fit score is below `threshold`, the pipeline stops after compensation research and skips generating outputs.
+If the fit score is below `threshold`, the pipeline stops after compensation research, skips generating outputs, and files the run under `jobs/no/` instead of `jobs/` — so `jobs/` only holds applications worth reviewing.
 
 ---
 
@@ -163,7 +210,9 @@ If the fit score is below `threshold`, the pipeline stops after compensation res
 
 ```
 talent-matcher/
-  pipeline.py                  CLI orchestrator
+  pipeline.py                  CLI orchestrator (file or URL input)
+  batch.py                     multi-URL runner: parallel fetch → prefilter → parallel pipelines
+  prefilter.py                 zero-token keyword filter vs experience-bank tags (also a CLI)
   config.yaml                  your personal config (gitignored)
   config.example.yaml          template to copy
   data/
@@ -174,11 +223,13 @@ talent-matcher/
   templates/
     cover_letter.jinja         Jinja template — structure + 5 LLM-filled slots
   agents/
+    jd_fetcher.py              posting URL → JD text (ATS public APIs, JSON-LD fallback)
     jd_parser.py               extracts structured data from the JD
     story_matcher.py           scores each STAR story against the JD
-    scorer.py                  produces 0–100 fit score with rationale
-    salary_researcher.py       reports advertised salary or web-researches a range; surfaces eligibility restrictions
-    resume_tailor.py           rewrites resume for the role (no fabrication)
+    resume_matcher.py          matches resume vs. JD by category (skills/keywords/title/degree), checks word count + accomplishments, cross-references the STAR story bank for skills the resume omits
+    scorer.py                  produces 0–100 fit score with rationale, informed by the resume match report
+    salary_researcher.py       reports advertised salary, or web-researches a range; surfaces eligibility restrictions
+    resume_tailor.py           rewrites resume for the role (no fabrication beyond what's evidenced in the resume or story bank)
     resume_docx.py             renders markdown to .docx (used by resume and interview prep)
     cover_letter.py            LLM fills slots → Jinja renders final letter
     cover_letter_docx.py       renders cover letter markdown to .docx
@@ -207,4 +258,4 @@ A `.vscode/launch.json` is included with run configurations:
 - **Run Pipeline (example JD)** — hardcoded path, just press F5
 - **Run Pipeline (prompt for JD path)** — prompts for path at launch
 - **Run Pipeline (with hiring manager)** — prompts for path + manager name
-- **Debug: JD Parser / Story Matcher / Cover Letter** — run individual agents in isolation
+- **Debug: JD Parser / Story Matcher / Resume Matcher / Cover Letter** — run individual agents in isolation
