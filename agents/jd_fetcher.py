@@ -71,8 +71,8 @@ def _compose(title: str | None, company: str | None, location: str | None, body:
 # --- ATS handlers ------------------------------------------------------------
 
 def _fetch_greenhouse(url: str, parsed) -> FetchedJob:
-    m = re.search(r"^/(?:embed/job_app.*|([^/]+)/jobs/(\d+))", parsed.path)
-    if not m or not m.group(1):
+    m = re.search(r"^/([^/]+)/jobs/(\d+)", parsed.path)
+    if not m:
         raise FetchError("unrecognised Greenhouse URL shape")
     board, job_id = m.group(1), m.group(2)
     data = _get_json(f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs/{job_id}")
