@@ -10,6 +10,7 @@ candidate:
 pipeline:
   threshold: 60          # minimum score (0-100) to generate outputs
   model: "claude-sonnet-4-6"
+  top_stories: 3         # number of top STAR stories passed to each prompt
 
 prefilter:
   min_keyword_matches: 3 # experience-bank keyword overlaps required before batch.py spends tokens on a posting

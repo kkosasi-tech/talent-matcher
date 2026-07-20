@@ -2,11 +2,9 @@ from datetime import date
 from pathlib import Path
 import anthropic
 from jinja2 import Environment, FileSystemLoader
-from config import get_anthropic_api_key
+from config import get_anthropic_api_key, get_model
 from models.schemas import MatchResult, Score, CoverLetterSlots, CoverLetterContext
 from models.utils import parse_json_response
-
-MODEL = "claude-sonnet-4-6"
 
 SYSTEM = """You are an expert cover letter writer. You write compelling, specific, non-generic cover letters.
 Each section must be concrete, referencing real accomplishments and the specific company/role.
@@ -52,7 +50,7 @@ def _generate_slots(match: MatchResult, score: Score) -> CoverLetterSlots:
     )
 
     with client.messages.stream(
-        model=MODEL,
+        model=get_model(),
         max_tokens=2048,
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],

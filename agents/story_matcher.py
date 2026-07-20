@@ -1,11 +1,9 @@
 import yaml
 from pathlib import Path
 import anthropic
-from config import get_anthropic_api_key
+from config import get_anthropic_api_key, get_model
 from models.schemas import ParsedJD, StoryMatch, MatchResult
 from models.utils import parse_json_response
-
-MODEL = "claude-sonnet-4-6"
 
 SYSTEM = """You are an expert career advisor. You match a candidate's STAR stories to job requirements.
 Do not invent anything new and do not combine STAR stories with resume bullets.
@@ -41,7 +39,7 @@ def _load_stories(bank_path: Path) -> list[dict]:
         return yaml.safe_load(f)["stories"]
 
 
-def match_stories(jd: ParsedJD, bank_path: Path | None = None) -> MatchResult:
+def match_stories(jd: ParsedJD, bank_path: Path | None = None, top_n: int = 3) -> MatchResult:
     if bank_path is None:
         bank_path = Path(__file__).parent.parent / "data" / "experience_bank.yaml"
 
@@ -58,7 +56,7 @@ def match_stories(jd: ParsedJD, bank_path: Path | None = None) -> MatchResult:
     )
 
     with client.messages.stream(
-        model=MODEL,
+        model=get_model(),
         max_tokens=4096,
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
@@ -77,6 +75,6 @@ def match_stories(jd: ParsedJD, bank_path: Path | None = None) -> MatchResult:
 
     matches_data = parse_json_response(text_blocks[0].text)
     matches = [StoryMatch(**m) for m in matches_data]
-    top_stories = matches[:3]
+    top_stories = matches[:top_n]
 
     return MatchResult(jd=jd, matches=matches, top_stories=top_stories)

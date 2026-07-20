@@ -93,6 +93,17 @@ def markdown_to_docx(markdown: str, out_path: str | Path) -> Path:
                 subtitle_pending = False
             continue
 
+        if line.startswith("### "):
+            text = line[4:].strip()
+            subtitle_pending = False
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_after = Pt(0)
+            run = p.add_run(text)
+            run.bold = True
+            run.font.size = Pt(11)
+            continue
+
         if line.startswith("## "):
             text = line[3:].strip()
             p = doc.add_paragraph()

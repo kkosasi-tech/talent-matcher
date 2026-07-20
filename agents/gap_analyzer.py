@@ -1,11 +1,9 @@
 from pathlib import Path
 import yaml
 import anthropic
-from config import get_anthropic_api_key
+from config import get_anthropic_api_key, get_model
 from models.schemas import MatchResult, Score, GapAnalysis
 from models.utils import parse_json_response
-
-MODEL = "claude-sonnet-4-6"
 
 SYSTEM = """You are a career development advisor. Identify skill gaps between a candidate's experience
 and a target role, then suggest actionable, specific learning resources.
@@ -77,7 +75,7 @@ def analyze_gaps(match: MatchResult, score: Score, bank_path: Path | None = None
     )
 
     with client.messages.stream(
-        model=MODEL,
+        model=get_model(),
         max_tokens=4096,
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
@@ -96,3 +94,40 @@ def analyze_gaps(match: MatchResult, score: Score, bank_path: Path | None = None
 
     data = parse_json_response(text_blocks[0].text)
     return GapAnalysis(**data)
+
+
+def render_gaps_md(gaps: GapAnalysis, role: str = "", company: str = "") -> str:
+    header = f"# Skill Gaps & Learning Plan"
+    if role and company:
+        header += f" — {role} @ {company}"
+    lines = [header, ""]
+
+    if gaps.missing_skills:
+        lines += ["## Missing Skills", ""]
+        lines += [f"- {s}" for s in gaps.missing_skills]
+        lines += [""]
+
+    if gaps.partial_skills:
+        lines += ["## Partial Skills (Need Deepening)", ""]
+        lines += [f"- {s}" for s in gaps.partial_skills]
+        lines += [""]
+
+    if gaps.priority_order:
+        lines += ["## Priority Order", ""]
+        for i, skill in enumerate(gaps.priority_order, 1):
+            weeks = gaps.estimated_weeks.get(skill, "?")
+            lines += [f"{i}. **{skill}** — ~{weeks} week{'s' if weeks != 1 else ''}"]
+        lines += [""]
+
+    if gaps.learning_resources:
+        lines += ["## Learning Resources", ""]
+        by_skill: dict[str, list] = {}
+        for r in gaps.learning_resources:
+            by_skill.setdefault(r["skill"], []).append(r)
+        for skill, resources in by_skill.items():
+            lines += [f"### {skill}", ""]
+            for r in resources:
+                lines += [f"- [{r['type']}] {r['resource']}"]
+            lines += [""]
+
+    return "\n".join(lines)

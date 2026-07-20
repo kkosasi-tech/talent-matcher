@@ -1,9 +1,8 @@
 import anthropic
-from config import get_anthropic_api_key
+from config import get_anthropic_api_key, get_model
 from models.schemas import MatchReport, MatchResult, Score
 from models.utils import parse_json_response
 
-MODEL = "claude-sonnet-4-6"
 THRESHOLD = 60
 
 SYSTEM = """You are an expert recruiter and career advisor. Score candidate-job fit objectively.
@@ -74,7 +73,7 @@ def score_match(match: MatchResult, match_report: MatchReport, threshold: int = 
     )
 
     with client.messages.stream(
-        model=MODEL,
+        model=get_model(),
         max_tokens=1024,
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
