@@ -6,12 +6,18 @@ Usage:
         [--hiring-manager "Alex Smith"] \
         [--referral-name "Jane Doe"] \
         [--referral-context "backend engineering"] \
-        [--threshold 60]
+        [--threshold 60] \
+        [--result-json path/to/summary.json]
 
-Candidate info (name, email, phone, linkedin) is read from config.yaml.
+    python pipeline.py --url https://job-boards.greenhouse.io/acme/jobs/123
+
+Runs that score below the threshold are filed under jobs/no/; passing runs
+land in jobs/ for review. Candidate info (name, email, phone, linkedin) is
+read from config.yaml.
 """
 
 import argparse
+import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
@@ -24,16 +30,18 @@ from agents.gap_analyzer import analyze_gaps
 from agents.jd_parser import parse_jd
 from agents.cover_letter_docx import markdown_to_docx as cover_letter_to_docx
 from agents.resume_docx import markdown_to_docx as resume_to_docx
+from agents.resume_matcher import match_resume
 from agents.resume_tailor import tailor_resume
 from agents.salary_researcher import render_compensation_md, research_compensation
 from agents.scorer import score_match
 from agents.story_matcher import match_stories
 from models.schemas import PipelineResult
 
-def _make_job_dir(company: str, role: str, score: int) -> Path:
+def _make_job_dir(company: str, role: str, score: int, proceed: bool) -> Path:
     slug = f"{company}-{role}-score{score}-{date.today().isoformat()}"
     slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in slug).lower()
-    job_dir = Path("jobs") / slug
+    base = Path("jobs") if proceed else Path("jobs") / "no"
+    job_dir = base / slug
     job_dir.mkdir(parents=True, exist_ok=True)
     return job_dir
 
@@ -53,23 +61,31 @@ def run(
     candidate_linkedin = candidate.get("linkedin")
     if threshold is None:
         threshold = cfg.get("pipeline", {}).get("threshold", 60)
-    print("==> [1/5] Parsing job description...")
+    print("==> [1/6] Parsing job description...")
     parsed_jd = parse_jd(jd_text)
     print(f"    Role: {parsed_jd.role} @ {parsed_jd.company}")
 
-    print("==> [2/5] Matching STAR stories to JD...")
+    print("==> [2/6] Matching STAR stories to JD...")
     match = match_stories(parsed_jd)
     print(f"    Top match: {match.top_stories[0].story_title if match.top_stories else 'none'}")
 
-    print("==> [3/5] Scoring fit...")
-    score = score_match(match, threshold=threshold)
+    print("==> [3/6] Matching resume against JD...")
+    match_report = match_resume(parsed_jd)
+    print(f"    Resume: {match_report.resume_word_count} words "
+          f"({'within' if match_report.resume_word_count_ok else 'outside'} 500-700 target)")
+    if match_report.missing_skills:
+        print(f"    Missing skills flagged: {', '.join(match_report.missing_skills)}")
+
+    print("==> [4/6] Scoring fit...")
+    score = score_match(match, match_report, threshold=threshold)
     print(f"    Score: {score.overall}/100 — proceed: {score.proceed}")
     print(f"    {score.rationale}")
 
-    job_dir = _make_job_dir(parsed_jd.company, parsed_jd.role, score.overall)
+    job_dir = _make_job_dir(parsed_jd.company, parsed_jd.role, score.overall, score.proceed)
     (job_dir / "jd.txt").write_text(jd_text)
     (job_dir / "parsed_jd.json").write_text(parsed_jd.model_dump_json(indent=2))
     (job_dir / "matches.json").write_text(match.model_dump_json(indent=2))
+    (job_dir / "match_report.json").write_text(match_report.model_dump_json(indent=2))
     (job_dir / "score.json").write_text(score.model_dump_json(indent=2))
     print(f"    Output dir: {job_dir}")
 
@@ -91,23 +107,25 @@ def run(
 
     if not score.proceed:
         print(f"\n  Score {score.overall} is below threshold {threshold}. Stopping pipeline.")
+        print(f"  Outputs filed under {job_dir}/ for the record.")
         print("  Run with --threshold lower to force generation, or address the gaps first.")
         return PipelineResult(
             job_dir=str(job_dir),
             parsed_jd=parsed_jd,
             matches=match,
+            match_report=match_report,
             score=score,
             compensation=compensation,
         )
 
-    print("==> [4/5] Generating tailored resume, cover letter, gap analysis (parallel)...")
+    print("==> [5/6] Generating tailored resume, cover letter, gap analysis (parallel)...")
 
     tailored_resume = None
     cover_letter = None
     gaps = None
 
     def _tailor():
-        return tailor_resume(match, score)
+        return tailor_resume(match, score, match_report=match_report)
 
     def _cover():
         return generate_cover_letter(
@@ -146,19 +164,21 @@ def run(
     cover_letter_to_docx(cover_letter, job_dir / "cover_letter.docx")
     (job_dir / "gaps.json").write_text(gaps.model_dump_json(indent=2))
 
-    print("==> [5/5] Done.")
+    print("==> [6/6] Done.")
     print(f"\nOutputs in {job_dir}/")
     print(f"  resume.md        — tailored resume")
     print(f"  resume.docx      — tailored resume (Word)")
     print(f"  cover_letter.md  — cover letter")
     print(f"  cover_letter.docx — cover letter (Word)")
     print(f"  compensation.md  — salary estimate & eligibility restrictions")
+    print(f"  match_report.json — resume/JD category match report")
     print(f"  gaps.json        — learning recommendations")
 
     return PipelineResult(
         job_dir=str(job_dir),
         parsed_jd=parsed_jd,
         matches=match,
+        match_report=match_report,
         score=score,
         compensation=compensation,
         tailored_resume=tailored_resume,
@@ -169,25 +189,48 @@ def run(
 
 def main():
     parser = argparse.ArgumentParser(description="Job application pipeline")
-    parser.add_argument("--jd", required=True, help="Path to job description text file")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--jd", help="Path to job description text file")
+    source.add_argument("--url", help="Job posting URL (ATS API or JobPosting JSON-LD)")
     parser.add_argument("--hiring-manager", help="Hiring manager name if known")
     parser.add_argument("--referral-name", help="Referral contact name")
     parser.add_argument("--referral-context", help="Context about the referral")
     parser.add_argument("--threshold", type=int, help="Minimum score to proceed (overrides config.yaml)")
+    parser.add_argument("--result-json", help="Write a machine-readable run summary to this path")
     args = parser.parse_args()
 
-    jd_path = Path(args.jd)
-    if not jd_path.exists():
-        print(f"Error: JD file not found: {args.jd}", file=sys.stderr)
-        sys.exit(1)
+    if args.url:
+        from agents.jd_fetcher import fetch_jd
 
-    run(
-        jd_text=jd_path.read_text(),
+        print(f"==> Fetching JD from {args.url}")
+        fetched = fetch_jd(args.url)
+        print(f"    [{fetched.source}] {fetched.title} @ {fetched.company}")
+        jd_text = fetched.text
+    else:
+        jd_path = Path(args.jd)
+        if not jd_path.exists():
+            print(f"Error: JD file not found: {args.jd}", file=sys.stderr)
+            sys.exit(1)
+        jd_text = jd_path.read_text()
+
+    result = run(
+        jd_text=jd_text,
         hiring_manager=args.hiring_manager,
         referral_name=args.referral_name,
         referral_context=args.referral_context,
         threshold=args.threshold,
     )
+
+    if args.result_json:
+        summary = {
+            "job_dir": result.job_dir,
+            "company": result.parsed_jd.company,
+            "role": result.parsed_jd.role,
+            "score": result.score.overall,
+            "proceed": result.score.proceed,
+            "missing_skills": result.score.missing_skills,
+        }
+        Path(args.result_json).write_text(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":

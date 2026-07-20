@@ -10,3 +10,9 @@ candidate:
 pipeline:
   threshold: 60          # minimum score (0-100) to generate outputs
   model: "claude-sonnet-4-6"
+
+prefilter:
+  min_keyword_matches: 3 # experience-bank keyword overlaps required before batch.py spends tokens on a posting
+
+batch:
+  max_workers: 3         # parallel pipeline runs in batch.py

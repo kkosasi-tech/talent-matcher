@@ -1,0 +1,36 @@
+# urls.txt — posting URLs for batch.py, one per line. Lines starting with # are ignored.
+#
+#   python batch.py --urls-file urls.txt --dry-run   # fetch + prefilter only, free
+#   python batch.py --urls-file urls.txt             # prompts before spending tokens
+#
+# Supported URL shapes (fetched via each ATS's official public API):
+#   Greenhouse       https://job-boards.greenhouse.io/<board>/jobs/<id>
+#   Lever            https://jobs.lever.co/<company>/<posting-uuid>
+#   Ashby            https://jobs.ashbyhq.com/<org>/<posting-uuid>
+#   SmartRecruiters  https://jobs.smartrecruiters.com/<Company>/<id>-<slug>
+#   Workable         https://apply.workable.com/<account>/j/<shortcode>/
+# Any other careers page works too if it embeds schema.org JobPosting JSON-LD
+# (most do); JS-only pages that can't be extracted are reported as fetch failures.
+#
+# The postings below were live as of 2026-07-12 — replace them with your own
+# targets; postings expire, and an expired one just shows up as a fetch failure.
+
+# --- Stripe (Greenhouse) ---
+https://job-boards.greenhouse.io/stripe/jobs/7986185
+# Staff Engineer, Billing
+https://job-boards.greenhouse.io/stripe/jobs/7369269
+# Staff Engineer, Issuing
+https://job-boards.greenhouse.io/stripe/jobs/8026416
+# Senior Software Engineer
+
+# --- Palantir (Lever) ---
+https://jobs.lever.co/palantir/10dfc8bc-99ad-4ca2-ab76-853cb90a92c2
+# Backend Software Engineer - Application Development
+https://jobs.lever.co/palantir/1345438c-ebfc-4fa5-b545-30c1414f317c
+# Backend Software Engineer - Defense
+
+# --- OpenAI (Ashby) ---
+https://jobs.ashbyhq.com/openai/f763c6b3-5167-4a67-b691-4c3fa2c44156
+# Software Engineer, Data Infrastructure
+https://jobs.ashbyhq.com/openai/c1316397-25bb-4add-9e9d-0e3ea8ba929a
+# Software Engineer, Agent Infrastructure
