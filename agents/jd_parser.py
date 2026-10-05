@@ -14,7 +14,12 @@ PROMPT = """Parse this job description and return a JSON object with these field
 - responsibilities: array of strings (key job duties, max 8)
 - seniority_level: one of "junior", "mid", "senior", "staff", "principal"
 - domain: one of "backend", "frontend", "fullstack", "data", "ml", "devops", "mobile", "other"
-- keywords: array of strings (important domain terms, technologies, methodologies)
+- keywords: array of strings (important domain terms, technologies, or methodologies the CANDIDATE is
+  expected to know or have used — exclude terms that only describe the product's own feature set,
+  supported platforms, or customer environment, e.g. an OS/device list describing what the product
+  manages rather than what the engineer must have built for. Also exclude the employer's own
+  project/product codenames and marketing/vision taglines for the thing being built — e.g. "you will
+  help build Project X" means Project X cannot be prior experience any external candidate could have)
 - location: string or null (work location, city/state, or "Remote" if stated; null if not mentioned)
 - salary_advertised: string or null (the compensation/salary range ONLY if it is explicitly stated in the JD, e.g. "$160,000 - $200,000"; null if the JD does not state any salary)
 - restrictions: array of strings (eligibility restrictions explicitly stated, e.g. "US Citizenship required", "Must be eligible for security clearance", "No visa sponsorship", "Onsite only"; empty array if none stated)

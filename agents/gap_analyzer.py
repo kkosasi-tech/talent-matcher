@@ -1,15 +1,14 @@
 from pathlib import Path
-import yaml
 import anthropic
 from config import get_anthropic_api_key, get_model
-from models.schemas import MatchResult, Score, GapAnalysis
+from models.schemas import GapAnalysis, MatchReport, MatchResult, Score
 from models.utils import parse_json_response
 
 SYSTEM = """You are a career development advisor. Identify skill gaps between a candidate's experience
 and a target role, then suggest actionable, specific learning resources.
 Always respond with valid JSON."""
 
-PROMPT = """Analyze gaps between this candidate's experience and the target role.
+PROMPT = """Build a learning plan for closing this candidate's gaps for the target role.
 
 Role: {role} at {company}
 Required skills: {required_skills}
@@ -20,24 +19,32 @@ Candidate's full resume:
 {resume_text}
 ---
 
-All skills and technologies across the candidate's complete experience history:
-{all_skills}
+The resume/JD match report already determined which skills are genuinely missing (no evidence anywhere
+in the resume or the candidate's STAR story bank) — treat this as authoritative, do not add to it or
+second-guess it:
+Missing: {missing_skills}
 
-IMPORTANT: Only list a skill as "missing" if it is genuinely absent from both the resume AND the full skills list above.
-If a skill appears anywhere in the resume or skills list, do NOT list it as missing — at most list it as "partial" if the level or recency is insufficient for this role.
+These skills ARE demonstrated (in the resume or the candidate's STAR story bank) — do not flag them as
+missing, and only flag one as "partial" below if the resume/story evidence clearly shows an outdated or
+shallow level for this specific role:
+Demonstrated: {demonstrated_skills}
 
 Return JSON:
 {{
-  "missing_skills": [skills clearly required but genuinely absent from the candidate's entire experience],
-  "partial_skills": [skills the candidate has but not at the depth, recency, or level the role requires],
+  "partial_skills": [
+    {{
+      "skill": string (from the demonstrated list above),
+      "reason": string (why this is only partial for this role — outdated, shallow, or below the level required; be conservative, only include with clear justification)
+    }}
+  ],
   "learning_resources": [
     {{
-      "skill": string,
+      "skill": string (drawn from the missing or partial skills above),
       "resource": string (specific book, course, project, or practice approach),
       "type": one of "course", "book", "project", "practice", "certification"
     }}
   ],
-  "priority_order": [skills from missing_skills + partial_skills ordered highest impact first],
+  "priority_order": [skills from the missing list + your partial_skills, ordered highest impact first],
   "estimated_weeks": {{skill: weeks_to_competency}}
 }}
 
@@ -45,23 +52,22 @@ Be specific with resources (e.g. "FastAPI official tutorial + build 2 side proje
 Respond ONLY with the JSON object."""
 
 
-def _all_story_skills(bank_path: Path) -> set[str]:
-    with open(bank_path) as f:
-        stories = yaml.safe_load(f)["stories"]
-    skills: set[str] = set()
-    for s in stories:
-        skills.update(s.get("tags", []))
-        skills.update(s.get("seniority_signals", []))
-    return skills
+def analyze_gaps(
+    match: MatchResult,
+    score: Score,
+    match_report: MatchReport,
+    resume_path: Path | None = None,
+) -> GapAnalysis:
+    if resume_path is None:
+        resume_path = Path(__file__).parent.parent / "data" / "resume.md"
 
-
-def analyze_gaps(match: MatchResult, score: Score, bank_path: Path | None = None) -> GapAnalysis:
-    if bank_path is None:
-        bank_path = Path(__file__).parent.parent / "data" / "experience_bank.yaml"
-
-    resume_path = Path(__file__).parent.parent / "data" / "resume.md"
     resume_text = resume_path.read_text()
-    all_skills = _all_story_skills(bank_path)
+    demonstrated_skills = sorted(set(
+        match_report.required_skills.matched
+        + match_report.preferred_skills.matched
+        + match_report.soft_skills.matched
+        + match_report.keywords.matched
+    ))
 
     client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
@@ -71,7 +77,8 @@ def analyze_gaps(match: MatchResult, score: Score, bank_path: Path | None = None
         required_skills=", ".join(match.jd.required_skills),
         preferred_skills=", ".join(match.jd.preferred_skills),
         resume_text=resume_text,
-        all_skills=", ".join(sorted(all_skills)),
+        missing_skills=", ".join(match_report.missing_skills) or "none",
+        demonstrated_skills=", ".join(demonstrated_skills) or "none",
     )
 
     with client.messages.stream(
@@ -93,6 +100,7 @@ def analyze_gaps(match: MatchResult, score: Score, bank_path: Path | None = None
         )
 
     data = parse_json_response(text_blocks[0].text)
+    data["missing_skills"] = match_report.missing_skills
     return GapAnalysis(**data)
 
 
@@ -109,7 +117,7 @@ def render_gaps_md(gaps: GapAnalysis, role: str = "", company: str = "") -> str:
 
     if gaps.partial_skills:
         lines += ["## Partial Skills (Need Deepening)", ""]
-        lines += [f"- {s}" for s in gaps.partial_skills]
+        lines += [f"- **{s.skill}** — {s.reason}" for s in gaps.partial_skills]
         lines += [""]
 
     if gaps.priority_order:

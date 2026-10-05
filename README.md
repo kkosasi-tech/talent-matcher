@@ -4,10 +4,10 @@ Automated job application pipeline. Paste a job description, get a tailored resu
 
 ```
 URL/file → JD Fetcher → Keyword Prefilter (free) → JD Parser → Story Matcher → Resume Matcher → Scorer → Salary Researcher
-                              │                                                                              ├─(score < threshold)── jobs/no/
-                              └─(too few keyword matches)── jobs/no/                                         └─(score ≥ threshold)─┬─ Resume Tailor    ┐
+                              │                                                                              ├─(score < threshold)── jobs/unfit/
+                              └─(too few keyword matches)── jobs/unfit/                                      └─(score ≥ threshold)─┬─ Resume Tailor    ┐
                                                                                                                                      ├─ Cover Letter     │
-                                                                                                                                     ├─ Gap Analyzer      ├─ jobs/<output-dir>/
+                                                                                                                                     ├─ Gap Analyzer      ├─ jobs/candidate/<output-dir>/
                                                                                                                                      └─ Interview Prep    ┘
 ```
 
@@ -35,7 +35,7 @@ cp data/experience_bank.example.yaml data/experience_bank.yaml
 python pipeline.py --jd path/to/job.txt
 ```
 
-Outputs land in `jobs/<company>-<role>-score<N>-<date>/`.
+Outputs land in `jobs/candidate/<company>-<role>-score<N>-<date>/`.
 
 ---
 
@@ -160,7 +160,7 @@ python batch.py --urls-file urls.txt --dry-run
 python batch.py --urls-file urls.txt --yes
 ```
 
-Postings that fail the keyword prefilter are filed under `jobs/no/` immediately
+Postings that fail the keyword prefilter are filed under `jobs/unfit/` immediately
 without any API calls. `prefilter.min_keyword_matches` and `batch.max_workers`
 in `config.yaml` control the cutoff and parallelism (`--min-matches` /
 `--workers` override per run).
@@ -173,10 +173,10 @@ regenerates `urls.txt` here from everything that cleared the prefilter.
 
 ### Output files
 
-Each run creates a folder under `jobs/`:
+Each run creates a folder under `jobs/candidate/`:
 
 ```
-jobs/acme-corp-senior-backend-engineer-score82-2026-06-16/
+jobs/candidate/acme-corp-senior-backend-engineer-score82-2026-06-16/
   jd.txt                  original job description
   parsed_jd.json          structured extraction of the JD
   matches.json            STAR stories ranked by relevance
@@ -202,7 +202,7 @@ jobs/acme-corp-senior-backend-engineer-score82-2026-06-16/
 
 **Interview prep** is calibrated to the JD's seniority level and the candidate's specific fit gaps. Questions span four categories: behavioral (STAR format), technical (depth matched to level), situational, and culture/fit. Sample answers are grounded in the candidate's actual experience from the resume and STAR stories.
 
-If the fit score is below `threshold`, the pipeline stops after compensation research, skips generating outputs, and files the run under `jobs/no/` instead of `jobs/` — so `jobs/` only holds applications worth reviewing.
+If the fit score is below `threshold`, the pipeline stops after compensation research, skips generating outputs, and files the run under `jobs/unfit/` instead of `jobs/candidate/` — so `jobs/candidate/` only holds applications worth reviewing.
 
 ---
 
