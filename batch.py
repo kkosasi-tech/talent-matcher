@@ -11,8 +11,9 @@ Flow (token spend only happens in step 3):
        report how many postings match before anything is sent to the API.
     3. After confirmation, run matching postings through the pipeline in
        parallel subprocesses. Runs scoring below the threshold are filed in
-       jobs/no/, passing runs in jobs/. Postings that fail the prefilter are
-       filed in jobs/no/ immediately without spending any tokens.
+       jobs/unfit/, passing runs in jobs/candidate/. Postings that fail the
+       prefilter are filed in jobs/unfit/ immediately without spending any
+       tokens.
 """
 
 from __future__ import annotations
@@ -43,6 +44,8 @@ class BatchItem:
     prefilter: PrefilterResult | None = None
     score: int | None = None
     proceed: bool | None = None
+    resume_quality: int | None = None
+    missing_skills: list[str] = field(default_factory=list)
     job_dir: str | None = None
     run_error: str | None = None
     output: str = ""
@@ -72,13 +75,13 @@ def _fetch_all(urls: list[str]) -> list[BatchItem]:
 
 
 def _file_rejected(item: BatchItem) -> Path:
-    """Record a prefilter-rejected posting under jobs/no/ (no tokens spent)."""
+    """Record a prefilter-rejected posting under jobs/unfit/ (no tokens spent)."""
     fetched, pf = item.fetched, item.prefilter
     slug = _slugify(
         f"{fetched.company or 'unknown'}-{fetched.title or 'unknown'}"
         f"-prefilter{pf.matched_count}-{date.today().isoformat()}"
     )
-    out = ROOT / "jobs" / "no" / slug
+    out = ROOT / "jobs" / "unfit" / slug
     out.mkdir(parents=True, exist_ok=True)
     (out / "jd.txt").write_text(fetched.text)
     (out / "prefilter.json").write_text(json.dumps(
@@ -113,6 +116,8 @@ def _run_pipeline(item: BatchItem, threshold: int | None) -> None:
         summary = json.loads(result_file.read_text())
         item.score = summary["score"]
         item.proceed = summary["proceed"]
+        item.resume_quality = summary.get("resume_quality")
+        item.missing_skills = summary.get("missing_skills", [])
         item.job_dir = summary["job_dir"]
 
 
@@ -200,17 +205,23 @@ def main():
                 print(item.output.strip())
             else:
                 verdict = "PASS" if item.proceed else "below threshold"
-                print(f"    done  [{item.score:>3}] {verdict:<16} {item.label}")
+                gaps = f", {len(item.missing_skills)} gap(s)" if item.missing_skills else ""
+                print(f"    done  [{item.score:>3}] {verdict:<16} "
+                      f"resume_quality={item.resume_quality}{gaps}  {item.label}")
 
     print("\n==> Batch summary")
     for item in sorted(matching, key=lambda i: -(i.score or -1)):
         if item.run_error:
             print(f"    ERROR   {item.label}")
         else:
-            arrow = "jobs/" if item.proceed else "jobs/no/"
-            print(f"    {item.score:>3}  ->  {arrow:<9} {item.job_dir}")
+            arrow = "jobs/candidate/" if item.proceed else "jobs/unfit/"
+            rq = str(item.resume_quality) if item.resume_quality is not None else "?"
+            skills_note = f" (missing: {', '.join(item.missing_skills[:4])}" + \
+                (", ..." if len(item.missing_skills) > 4 else "") + ")" if item.missing_skills else ""
+            print(f"    {item.score:>3}  ->  {arrow:<9} resume_quality={rq:<3} "
+                  f"{item.job_dir}{skills_note}")
     for item in rejected:
-        print(f"    skip ->  jobs/no/   {item.label} (prefilter {item.prefilter.matched_count} kw)")
+        print(f"    skip ->  jobs/unfit/   {item.label} (prefilter {item.prefilter.matched_count} kw)")
     for item in failed:
         print(f"    fetch failed        {item.url}")
 

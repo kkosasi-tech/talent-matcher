@@ -10,11 +10,27 @@ PROMPT = """Tailor this resume for the target role. Rules:
 - Do NOT invent experience, skills, or metrics that don't exist in the original resume or in the
   recoverable skills evidence below
 - Do NOT combine bullets since they may reflect diffeerent projects
-- Do NOT elevate experience and level too much
+- Do NOT elevate experience and level too much 
+- The headline under the candidate's name and the opening words of the summary must use the
+  candidate's own highest actual title as it appears in the Employment History below — NEVER the
+  target role's title, even if it sounds more senior or is a closer match. "Target Role" below is
+  given only so you can emphasize relevant scope, skills, and keywords in the summary — it is not a
+  title the candidate holds and must not be self-applied.
 - Reorder bullet points so the most JD-relevant ones appear first
 - Rewrite bullets to use keywords from the JD where truthfully applicable
-- Add/adjust the summary section to target this specific role
+- Rephrase the matching bullets with more senior sounding words matching the JD
+- Add/adjust the summary section to target this specific role, without changing the candidate's
+  stated title/level
 - Keep the same Markdown structure and length (±10%)'
+- The resume has multiple job entries with the same company/title but different date ranges (e.g.
+  several "Software Developer | Ericsson" entries). Each story/skill below is tagged with the company,
+  role, and year it actually happened. When emphasizing or weaving in a story or skill, place it under
+  the resume entry whose date range actually covers that year — never default to the most recent entry
+  just because the company matches.
+- Remove past experience in the resume that is not relevant to the job descriptions, keep the resume 
+  shorter in a sliding windows, do not remove in the middle experience as this will cause gaps in the 
+  resume. Keep the experience level not too long between 10-20 years and adjust the headline (number of years)
+  accordingly.
 
 Target Role: {role} at {company}
 Key JD requirements: {required_skills}
@@ -48,14 +64,14 @@ def tailor_resume(
     client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
     top_stories = "\n".join(
-        f"- {s.story_title} (matched: {', '.join(s.matched_keywords[:4])})"
+        f"- {s.story_title} [{s.company} — {s.role}, {s.year}] (matched: {', '.join(s.matched_keywords[:4])})"
         for s in match.top_stories
     )
 
     recoverable_section = ""
     if match_report and match_report.recoverable_skills:
         recoverable_lines = "\n".join(
-            f"- {r.skill}: {r.evidence} (from story: {r.story_id})"
+            f"- {r.skill}: {r.evidence} (from story: {r.story_id}, [{r.company} — {r.role}, {r.year}])"
             for r in match_report.recoverable_skills
         )
         recoverable_section = RECOVERABLE_SECTION_TEMPLATE.format(recoverable_lines=recoverable_lines)

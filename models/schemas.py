@@ -24,6 +24,9 @@ class StoryMatch(BaseModel):
     relevance_score: float = Field(ge=0.0, le=1.0)
     matched_keywords: list[str]
     star_summary: str  # condensed STAR for use in prompts
+    company: str = ""  # from the experience bank entry, not the LLM — pins the story to a resume job entry
+    role: str = ""
+    year: str = ""
 
 
 class MatchResult(BaseModel):
@@ -43,16 +46,22 @@ class RecoverableSkill(BaseModel):
     skill: str
     evidence: str  # what the story text actually says that demonstrates this skill
     story_id: str  # id of the grounding STAR story
+    company: str = ""  # from the experience bank entry, not the LLM — pins the story to a resume job entry
+    role: str = ""
+    year: str = ""
 
 
 class MatchReport(BaseModel):
     soft_skills: CategoryMatch
-    hard_skills: CategoryMatch
+    required_skills: CategoryMatch  # hard skills from the JD's required_skills list
+    preferred_skills: CategoryMatch  # hard skills from the JD's preferred_skills ("nice-to-have") list
     keywords: CategoryMatch
     job_title_match: CategoryMatch
     degree_match: CategoryMatch
     resume_word_count: int
-    resume_word_count_ok: bool  # True if 500-700 words
+    resume_word_count_ok: bool  # True if within [resume_word_min, resume_word_max]
+    resume_word_min: int
+    resume_word_max: int
     accomplishments_present: bool
     accomplishments_notes: str
     missing_skills: list[str] = Field(default_factory=list)  # union of hard/soft/keyword gaps, evidenced nowhere
@@ -90,9 +99,14 @@ class CoverLetterContext(BaseModel):
     slots: CoverLetterSlots
 
 
+class PartialSkill(BaseModel):
+    skill: str
+    reason: str
+
+
 class GapAnalysis(BaseModel):
     missing_skills: list[str]
-    partial_skills: list[str]
+    partial_skills: list[PartialSkill]
     learning_resources: list[dict]  # [{"skill": str, "resource": str, "type": str}]
     priority_order: list[str]
     estimated_weeks: dict[str, int]  # {"skill": weeks_to_competency}

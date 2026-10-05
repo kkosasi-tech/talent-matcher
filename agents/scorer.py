@@ -21,20 +21,26 @@ Top matched stories:
 
 Resume match report:
 - Soft skills match: {soft_skills_score}/100 (missing: {soft_skills_missing})
-- Hard skills match: {hard_skills_score}/100 (missing: {hard_skills_missing})
+- Required skills match: {required_skills_score}/100 (missing: {required_skills_missing})
+- Preferred skills match: {preferred_skills_score}/100 (missing: {preferred_skills_missing})
 - Other keyword match: {keywords_score}/100 (missing: {keywords_missing})
 - Job title match: {title_score}/100 ({title_notes})
 - Degree match: {degree_score}/100 ({degree_notes})
-- Resume length: {word_count} words ({length_verdict}; target 500-700)
+- Resume length: {word_count} words ({length_verdict}; target {word_min}-{word_max})
 - Accomplishments present: {accomplishments_present} ({accomplishments_notes})
+
+When weighing the above into skill_match, required skills matter most, preferred skills matter less
+(they are nice-to-haves, missing ones should only cost a few points), and the "other keyword match" is
+the weakest signal of the three — it can include incidental JD phrasing, not just true requirements —
+so let it nudge skill_match only slightly, never let it dominate over required/preferred skills.
 
 Return JSON with:
 {{
   "overall": int 0-100,
-  "skill_match": int 0-100 (how well required/preferred skills are covered, informed by the hard/soft/keyword match above),
+  "skill_match": int 0-100 (how well required/preferred skills are covered — weighted per the guidance above, not an unweighted average of required/preferred/keyword),
   "experience_relevance": int 0-100 (how relevant the STAR stories are to responsibilities),
   "seniority_fit": int 0-100 (does experience level match expectations, informed by the job title match),
-  "resume_quality": int 0-100 (resume length within the 500-700 word target and presence of concrete accomplishments),
+  "resume_quality": int 0-100 (resume length within the {word_min}-{word_max} word target and presence of concrete accomplishments),
   "rationale": string (2-3 sentences explaining the score and key gaps)
 }}
 
@@ -58,8 +64,10 @@ def score_match(match: MatchResult, match_report: MatchReport, threshold: int = 
         story_summaries=story_summaries,
         soft_skills_score=match_report.soft_skills.score,
         soft_skills_missing=", ".join(match_report.soft_skills.missing) or "none",
-        hard_skills_score=match_report.hard_skills.score,
-        hard_skills_missing=", ".join(match_report.hard_skills.missing) or "none",
+        required_skills_score=match_report.required_skills.score,
+        required_skills_missing=", ".join(match_report.required_skills.missing) or "none",
+        preferred_skills_score=match_report.preferred_skills.score,
+        preferred_skills_missing=", ".join(match_report.preferred_skills.missing) or "none",
         keywords_score=match_report.keywords.score,
         keywords_missing=", ".join(match_report.keywords.missing) or "none",
         title_score=match_report.job_title_match.score,
@@ -68,6 +76,8 @@ def score_match(match: MatchResult, match_report: MatchReport, threshold: int = 
         degree_notes=match_report.degree_match.notes,
         word_count=match_report.resume_word_count,
         length_verdict="within target" if match_report.resume_word_count_ok else "outside target",
+        word_min=match_report.resume_word_min,
+        word_max=match_report.resume_word_max,
         accomplishments_present=match_report.accomplishments_present,
         accomplishments_notes=match_report.accomplishments_notes,
     )

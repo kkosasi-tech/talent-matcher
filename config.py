@@ -8,6 +8,8 @@ import yaml
 CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
 _DEFAULT_MODEL = "claude-sonnet-4-6"
+_DEFAULT_RESUME_WORD_MIN = 500
+_DEFAULT_RESUME_WORD_MAX = 700
 
 _config: dict | None = None
 
@@ -35,3 +37,11 @@ def get_anthropic_api_key() -> str:
 
 def get_model() -> str:
     return load_config().get("pipeline", {}).get("model", _DEFAULT_MODEL)
+
+
+def get_resume_word_count_range() -> tuple[int, int]:
+    pipeline_cfg = load_config().get("pipeline", {})
+    return (
+        pipeline_cfg.get("resume_word_count_min", _DEFAULT_RESUME_WORD_MIN),
+        pipeline_cfg.get("resume_word_count_max", _DEFAULT_RESUME_WORD_MAX),
+    )

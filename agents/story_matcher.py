@@ -73,8 +73,18 @@ def match_stories(jd: ParsedJD, bank_path: Path | None = None, top_n: int = 3) -
             f"content types={[b.type for b in response.content]}"
         )
 
+    stories_by_id = {s["id"]: s for s in stories}
+
     matches_data = parse_json_response(text_blocks[0].text)
-    matches = [StoryMatch(**m) for m in matches_data]
+    matches = []
+    for m in matches_data:
+        source = stories_by_id.get(m["story_id"], {})
+        matches.append(StoryMatch(
+            **m,
+            company=source.get("company") or "",
+            role=source.get("role") or "",
+            year=str(source.get("year") or ""),
+        ))
     top_stories = matches[:top_n]
 
     return MatchResult(jd=jd, matches=matches, top_stories=top_stories)

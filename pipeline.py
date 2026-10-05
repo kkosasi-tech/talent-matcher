@@ -11,9 +11,9 @@ Usage:
 
     python pipeline.py --url https://job-boards.greenhouse.io/acme/jobs/123
 
-Runs that score below the threshold are filed under jobs/no/; passing runs
-land in jobs/ for review. Candidate info (name, email, phone, linkedin) is
-read from config.yaml.
+Runs that score below the threshold are filed under jobs/unfit/; passing runs
+land in jobs/candidate/ for review. Candidate info (name, email, phone,
+linkedin) is read from config.yaml.
 """
 
 import argparse
@@ -41,7 +41,7 @@ from models.schemas import PipelineResult
 def _make_job_dir(company: str, role: str, score: int, proceed: bool) -> Path:
     slug = f"{company}-{role}-score{score}-{date.today().isoformat()}"
     slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in slug).lower()
-    base = Path("jobs") if proceed else Path("jobs") / "no"
+    base = Path("jobs") / "candidate" if proceed else Path("jobs") / "unfit"
     job_dir = base / slug
     job_dir.mkdir(parents=True, exist_ok=True)
     return job_dir
@@ -65,22 +65,24 @@ def run(
         threshold = pipeline_cfg.get("threshold", 60)
     top_n = pipeline_cfg.get("top_stories", 3)
 
-    print("==> [1/6] Parsing job description...")
+    print("==> [1/5] Parsing job description...")
     parsed_jd = parse_jd(jd_text)
     print(f"    Role: {parsed_jd.role} @ {parsed_jd.company}")
 
-    print("==> [2/6] Matching STAR stories to JD...")
-    match = match_stories(parsed_jd, top_n=top_n)
-    print(f"    Top match: {match.top_stories[0].story_title if match.top_stories else 'none'}")
-
-    print("==> [3/6] Matching resume against JD...")
-    match_report = match_resume(parsed_jd)
+    print("==> [2/5] Matching STAR stories and resume against JD (parallel)...")
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        story_future = executor.submit(match_stories, parsed_jd, top_n=top_n)
+        resume_future = executor.submit(match_resume, parsed_jd)
+        match = story_future.result()
+        match_report = resume_future.result()
+    print(f"    Top story match: {match.top_stories[0].story_title if match.top_stories else 'none'}")
     print(f"    Resume: {match_report.resume_word_count} words "
-          f"({'within' if match_report.resume_word_count_ok else 'outside'} 500-700 target)")
+          f"({'within' if match_report.resume_word_count_ok else 'outside'} "
+          f"{match_report.resume_word_min}-{match_report.resume_word_max} target)")
     if match_report.missing_skills:
         print(f"    Missing skills flagged: {', '.join(match_report.missing_skills)}")
 
-    print("==> [4/6] Scoring fit...")
+    print("==> [3/5] Scoring fit...")
     score = score_match(match, match_report, threshold=threshold)
     print(f"    Score: {score.overall}/100 — proceed: {score.proceed}")
     print(f"    {score.rationale}")
@@ -122,7 +124,7 @@ def run(
             compensation=compensation,
         )
 
-    print("==> [5/6] Generating tailored resume, cover letter, gap analysis, interview prep (parallel)...")
+    print("==> [4/5] Generating tailored resume, cover letter, gap analysis, interview prep (parallel)...")
 
     tailored_resume = None
     cover_letter = None
@@ -146,7 +148,7 @@ def run(
         )
 
     def _gaps():
-        return analyze_gaps(match, score)
+        return analyze_gaps(match, score, match_report=match_report)
 
     def _interview():
         return generate_interview_prep(match, score)
@@ -186,7 +188,7 @@ def run(
         (job_dir / "interview_prep.md").write_text(interview_prep_md)
         resume_to_docx(interview_prep_md, job_dir / "interview_prep.docx")
 
-    print("==> [6/6] Done.")
+    print("==> [5/5] Done.")
     print(f"\nOutputs in {job_dir}/")
     print(f"  match_report.json     — resume/JD category match report")
     if compensation:
@@ -260,6 +262,7 @@ def main():
             "role": result.parsed_jd.role,
             "score": result.score.overall,
             "proceed": result.score.proceed,
+            "resume_quality": result.score.resume_quality,
             "missing_skills": result.score.missing_skills,
         }
         Path(args.result_json).write_text(json.dumps(summary, indent=2))

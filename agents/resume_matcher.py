@@ -1,9 +1,10 @@
 """Matches the candidate's resume against a job description.
 
-Reports category-by-category fit (soft skills, hard skills, other keywords,
-job title, degree), flags genuinely missing skills, and checks the resume
-itself: word count (target 500-700 words) and presence of concrete,
-quantified accomplishments rather than bare responsibilities.
+Reports category-by-category fit (soft skills, required skills, preferred skills,
+other keywords, job title, degree), flags genuinely missing skills, and checks the resume
+itself: word count (target configurable via pipeline.resume_word_count_min/max
+in config.yaml, default 500-700) and presence of concrete, quantified
+accomplishments rather than bare responsibilities.
 
 Also cross-references the full STAR story bank (not just the resume text) —
 a skill can be genuinely demonstrated in a story's action/result even if it
@@ -17,13 +18,9 @@ from pathlib import Path
 
 import anthropic
 import yaml
-from config import get_anthropic_api_key
+from config import get_anthropic_api_key, get_model, get_resume_word_count_range
 from models.schemas import CategoryMatch, MatchReport, ParsedJD, RecoverableSkill
 from models.utils import parse_json_response
-
-MODEL = "claude-sonnet-4-6"
-MIN_WORDS = 500
-MAX_WORDS = 700
 
 SYSTEM = """You are an expert recruiter and ATS analyst. Compare a candidate's resume against a job
 description, grounded only in what the resume and the candidate's STAR story bank actually state —
@@ -67,7 +64,8 @@ put any explanation in the category's "notes" field, not inline in the list item
 Return JSON with exactly these fields:
 {{
   "soft_skills": {{"score": int 0-100, "matched": [soft skills demonstrated in the resume or story bank, e.g. leadership, communication, mentoring], "missing": [soft skills the JD implies or requires with no evidence anywhere], "notes": string}},
-  "hard_skills": {{"score": int 0-100, "matched": [technical/hard skills from required+preferred demonstrated in the resume or story bank], "missing": [technical/hard skills from required+preferred with no evidence anywhere], "notes": string}},
+  "required_skills": {{"score": int 0-100, "matched": [skills from Required skills demonstrated in the resume or story bank], "missing": [skills from Required skills with no evidence anywhere], "notes": string}},
+  "preferred_skills": {{"score": int 0-100, "matched": [skills from Preferred skills demonstrated in the resume or story bank], "missing": [skills from Preferred skills with no evidence anywhere], "notes": string (these are nice-to-haves, not must-haves — do not score as harshly as required_skills)}},
   "keywords": {{"score": int 0-100, "matched": [other JD keywords/terms echoed in the resume or story bank], "missing": [JD keywords with no evidence anywhere], "notes": string}},
   "job_title_match": {{"score": int 0-100, "matched": [], "missing": [], "notes": string (does the candidate's current/past titles align with "{role}"?)}},
   "degree_match": {{"score": int 0-100, "matched": [], "missing": [], "notes": string (does the resume's education meet any degree requirement implied by the JD? if the JD states or implies no degree requirement, score 100 and say so)}},
@@ -100,6 +98,7 @@ def match_resume(
 
     resume_text = resume_path.read_text()
     word_count = _word_count(resume_text)
+    word_min, word_max = get_resume_word_count_range()
     stories = _load_stories(bank_path)
 
     client = anthropic.Anthropic(api_key=get_anthropic_api_key())
@@ -116,7 +115,7 @@ def match_resume(
     )
 
     with client.messages.stream(
-        model=MODEL,
+        model=get_model(),
         max_tokens=4096,
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
@@ -134,23 +133,39 @@ def match_resume(
         )
 
     data = parse_json_response(text_blocks[0].text)
+    stories_by_id = {s["id"]: s for s in stories}
+
+    def _enrich_recoverable(r: dict) -> dict:
+        source = stories_by_id.get(r["story_id"], {})
+        return {
+            **r,
+            "company": source.get("company") or "",
+            "role": source.get("role") or "",
+            "year": str(source.get("year") or ""),
+        }
 
     missing_skills = sorted(set(
-        data["hard_skills"]["missing"]
+        data["required_skills"]["missing"]
+        + data["preferred_skills"]["missing"]
         + data["soft_skills"]["missing"]
         + data["keywords"]["missing"]
     ))
 
     return MatchReport(
         soft_skills=CategoryMatch(**data["soft_skills"]),
-        hard_skills=CategoryMatch(**data["hard_skills"]),
+        required_skills=CategoryMatch(**data["required_skills"]),
+        preferred_skills=CategoryMatch(**data["preferred_skills"]),
         keywords=CategoryMatch(**data["keywords"]),
         job_title_match=CategoryMatch(**data["job_title_match"]),
         degree_match=CategoryMatch(**data["degree_match"]),
         resume_word_count=word_count,
-        resume_word_count_ok=MIN_WORDS <= word_count <= MAX_WORDS,
+        resume_word_count_ok=word_min <= word_count <= word_max,
+        resume_word_min=word_min,
+        resume_word_max=word_max,
         accomplishments_present=data["accomplishments_present"],
         accomplishments_notes=data["accomplishments_notes"],
         missing_skills=missing_skills,
-        recoverable_skills=[RecoverableSkill(**r) for r in data.get("recoverable_skills", [])],
+        recoverable_skills=[
+            RecoverableSkill(**_enrich_recoverable(r)) for r in data.get("recoverable_skills", [])
+        ],
     )
