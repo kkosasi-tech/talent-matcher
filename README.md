@@ -11,7 +11,7 @@ URL/file → JD Fetcher → Keyword Prefilter (free) → JD Parser → Story Mat
                                                                                                                                      └─ Interview Prep    ┘
 ```
 
-Uses [Claude](https://anthropic.com) via the Anthropic Python SDK. Each run costs roughly $0.01–0.05 depending on the size of your experience bank.
+Backed by [Claude](https://anthropic.com) (Anthropic API) or any local LLM via [Ollama](https://ollama.com) — you pick in `config.yaml`. With the Anthropic API each run costs roughly $0.01–0.05 depending on the size of your experience bank; local models are free.
 
 ---
 
@@ -23,8 +23,10 @@ git clone https://github.com/yourhandle/talent-matcher.git
 cd talent-matcher
 pip install -r requirements.txt
 
-# 2. Set your Anthropic API key
+# 2. Set your Anthropic API key (default provider), or skip straight to a local LLM:
 export ANTHROPIC_API_KEY=sk-ant-...
+# ...or with Ollama: install https://ollama.com, run `ollama pull qwen2.5:14b`,
+# and set `llm.provider: ollama` in config.yaml (see Setup below)
 
 # 3. Copy and fill in the example files (see Setup below)
 cp config.example.yaml config.yaml
@@ -41,13 +43,30 @@ Outputs land in `jobs/candidate/<company>-<role>-score<N>-<date>/`.
 
 ## Setup
 
-### 1. API key
+### 1. Choose an LLM provider
 
-The pipeline reads your Anthropic API key from the `ANTHROPIC_API_KEY` environment variable (recommended), or from `anthropic.api_key` in `config.yaml` as a fallback.
+The default backend is the Anthropic API. To use a **local LLM via [Ollama](https://ollama.com)** instead, install Ollama, pull a model, and switch one setting:
+
+```bash
+ollama pull qwen2.5:14b     # or any model you like
+```
+
+```yaml
+# config.yaml
+llm:
+  provider: ollama           # default is: anthropic
+  ollama_base_url: "http://localhost:11434"
+  ollama_model: "qwen2.5:14b"
+  ollama_timeout: 600        # seconds, for slow local models
+```
+
+With the **Anthropic API** provider (default), the key is read from the `ANTHROPIC_API_KEY` environment variable (recommended) or from `anthropic.api_key` in `config.yaml` as a fallback:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+> Note: the Salary Researcher's live web lookups use Anthropic's `web_search` tool, which is only available on the `anthropic` provider. With `ollama`, salary estimates come from the model's own knowledge.
 
 ### 2. `config.yaml`
 
@@ -246,7 +265,7 @@ talent-matcher/
 ## Requirements
 
 - Python 3.11+
-- `ANTHROPIC_API_KEY` environment variable (or set in `config.yaml`)
+- An LLM backend: `ANTHROPIC_API_KEY` (default provider, or `llm.provider: anthropic` in `config.yaml`), or a running Ollama instance (`llm.provider: ollama`)
 - See `requirements.txt` for package dependencies
 
 ---

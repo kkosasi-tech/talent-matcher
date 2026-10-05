@@ -1,6 +1,6 @@
 from pathlib import Path
-import anthropic
-from config import get_anthropic_api_key, get_model
+
+from llm import chat
 from models.schemas import GapAnalysis, MatchReport, MatchResult, Score
 from models.utils import parse_json_response
 
@@ -69,7 +69,6 @@ def analyze_gaps(
         + match_report.keywords.matched
     ))
 
-    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
     prompt = PROMPT.format(
         role=match.jd.role,
@@ -81,25 +80,16 @@ def analyze_gaps(
         demonstrated_skills=", ".join(demonstrated_skills) or "none",
     )
 
-    with client.messages.stream(
-        model=get_model(),
-        max_tokens=4096,
+    response = chat(
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        response = stream.get_final_message()
+        max_tokens=4096,
+    )
 
-    if response.stop_reason == "max_tokens":
+    if response.truncated:
         print("    WARNING: gap_analyzer response was truncated (hit max_tokens)")
 
-    text_blocks = [b for b in response.content if b.type == "text"]
-    if not text_blocks:
-        raise RuntimeError(
-            f"gap_analyzer got no text block. stop_reason={response.stop_reason!r}, "
-            f"content types={[b.type for b in response.content]}"
-        )
-
-    data = parse_json_response(text_blocks[0].text)
+    data = parse_json_response(response.text)
     data["missing_skills"] = match_report.missing_skills
     return GapAnalysis(**data)
 

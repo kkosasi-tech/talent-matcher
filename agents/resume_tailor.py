@@ -1,6 +1,5 @@
 from pathlib import Path
-import anthropic
-from config import get_anthropic_api_key, get_model
+from llm import chat
 from models.schemas import MatchReport, MatchResult, Score
 
 SYSTEM = """You are an expert resume writer. You tailor resumes to specific job descriptions
@@ -61,7 +60,6 @@ def tailor_resume(
         resume_path = Path(__file__).parent.parent / "data" / "resume.md"
 
     resume_text = resume_path.read_text()
-    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
     top_stories = "\n".join(
         f"- {s.story_title} [{s.company} — {s.role}, {s.year}] (matched: {', '.join(s.matched_keywords[:4])})"
@@ -85,12 +83,13 @@ def tailor_resume(
         resume_text=resume_text,
     )
 
-    with client.messages.stream(
-        model=get_model(),
-        max_tokens=4096,
+    response = chat(
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        response = stream.get_final_message()
+        max_tokens=4096,
+    )
 
-    return next(b for b in response.content if b.type == "text").text
+    if response.truncated:
+        print("    WARNING: resume_tailor response was truncated (hit max_tokens)")
+
+    return response.text

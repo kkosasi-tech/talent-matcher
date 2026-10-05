@@ -2,17 +2,16 @@
 Compensation researcher.
 
 If the job description already advertises a salary, we report it directly. If
-it does not, we use Claude's server-side web_search tool to estimate a typical
-market range for the role at that company and location, and cite the sources.
+it does not, estimate a typical market range for the role at that company and
+location (via Anthropic's server-side web_search tool when the provider is
+anthropic; from the model's own knowledge otherwise) and cite the sources.
 
 Eligibility restrictions (US Citizenship, security clearance, no visa
 sponsorship, onsite-only, etc.) are pulled from the parsed JD and carried into
 the report so they surface in one place alongside compensation.
 """
 
-import anthropic
-
-from config import get_anthropic_api_key, get_model
+from llm import chat
 from models.schemas import CompensationReport, ParsedJD
 from models.utils import parse_json_response
 
@@ -47,8 +46,6 @@ After researching, respond with ONLY a JSON object (no markdown fences):
 
 
 def _research_market_range(jd: ParsedJD) -> dict:
-    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
-
     prompt = PROMPT.format(
         role=jd.role,
         company=jd.company,
@@ -57,33 +54,24 @@ def _research_market_range(jd: ParsedJD) -> dict:
         jd_excerpt=jd.raw_text[:2500],
     )
 
-    with client.messages.stream(
-        model=get_model(),
-        max_tokens=3072,
+    response = chat(
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
+        max_tokens=3072,
         tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}],
-    ) as stream:
-        response = stream.get_final_message()
+    )
 
-    if response.stop_reason == "max_tokens":
+    if response.truncated:
         print("    WARNING: salary_researcher response was truncated (hit max_tokens)")
 
-    text_blocks = [b for b in response.content if b.type == "text"]
-    if not text_blocks:
-        raise RuntimeError(
-            f"salary_researcher got no text block. stop_reason={response.stop_reason!r}, "
-            f"content types={[b.type for b in response.content]}"
-        )
-
     # The final answer is the last text block; earlier text blocks are the model's
-    # narration between web searches.
-    data = parse_json_response(text_blocks[-1].text)
+    # narration between web searches (anthropic provider only — ollama returns one block).
+    data = parse_json_response(response.blocks[-1])
 
     # Backfill sources from web_search citations if the model omitted them.
     if not data.get("sources"):
         urls = []
-        for block in response.content:
+        for block in response.provider_content:
             for citation in getattr(block, "citations", None) or []:
                 url = getattr(citation, "url", None)
                 if url and url not in urls:

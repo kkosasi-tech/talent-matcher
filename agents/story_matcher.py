@@ -1,7 +1,6 @@
 import yaml
 from pathlib import Path
-import anthropic
-from config import get_anthropic_api_key, get_model
+from llm import chat
 from models.schemas import ParsedJD, StoryMatch, MatchResult
 from models.utils import parse_json_response
 
@@ -44,7 +43,6 @@ def match_stories(jd: ParsedJD, bank_path: Path | None = None, top_n: int = 3) -
         bank_path = Path(__file__).parent.parent / "data" / "experience_bank.yaml"
 
     stories = _load_stories(bank_path)
-    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
     prompt = PROMPT.format(
         role=jd.role,
@@ -55,27 +53,18 @@ def match_stories(jd: ParsedJD, bank_path: Path | None = None, top_n: int = 3) -
         stories_yaml=yaml.dump(stories, default_flow_style=False),
     )
 
-    with client.messages.stream(
-        model=get_model(),
-        max_tokens=4096,
+    response = chat(
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        response = stream.get_final_message()
+        max_tokens=4096,
+    )
 
-    if response.stop_reason == "max_tokens":
+    if response.truncated:
         print("    WARNING: story_matcher response was truncated (hit max_tokens)")
-
-    text_blocks = [b for b in response.content if b.type == "text"]
-    if not text_blocks:
-        raise RuntimeError(
-            f"story_matcher got no text block. stop_reason={response.stop_reason!r}, "
-            f"content types={[b.type for b in response.content]}"
-        )
 
     stories_by_id = {s["id"]: s for s in stories}
 
-    matches_data = parse_json_response(text_blocks[0].text)
+    matches_data = parse_json_response(response.text)
     matches = []
     for m in matches_data:
         source = stories_by_id.get(m["story_id"], {})

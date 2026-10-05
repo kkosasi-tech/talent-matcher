@@ -1,5 +1,4 @@
-import anthropic
-from config import get_anthropic_api_key, get_model
+from llm import chat
 from models.schemas import ParsedJD
 from models.utils import parse_json_response
 
@@ -35,26 +34,15 @@ Respond ONLY with the JSON object, no markdown fences."""
 
 
 def parse_jd(jd_text: str) -> ParsedJD:
-    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
-
-    with client.messages.stream(
-        model=get_model(),
-        max_tokens=4096,
+    response = chat(
         system=SYSTEM,
         messages=[{"role": "user", "content": PROMPT.format(jd_text=jd_text)}],
-    ) as stream:
-        response = stream.get_final_message()
+        max_tokens=4096,
+    )
 
-    if response.stop_reason == "max_tokens":
+    if response.truncated:
         print("    WARNING: jd_parser response was truncated (hit max_tokens)")
 
-    text_blocks = [b for b in response.content if b.type == "text"]
-    if not text_blocks:
-        raise RuntimeError(
-            f"jd_parser got no text block. stop_reason={response.stop_reason!r}, "
-            f"content types={[b.type for b in response.content]}"
-        )
-
-    data = parse_json_response(text_blocks[0].text)
+    data = parse_json_response(response.text)
     data["raw_text"] = jd_text
     return ParsedJD(**data)

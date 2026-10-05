@@ -1,5 +1,12 @@
+llm:
+  provider: anthropic           # "anthropic" (API) or "ollama" (local LLM, e.g. `ollama run qwen2.5:14b`)
+  # ollama provider only (ignored otherwise):
+  ollama_base_url: "http://localhost:11434"   # or OLLAMA_HOST for a remote instance
+  ollama_model: "qwen2.5:14b"                 # or set OLLAMA_MODEL env var
+  ollama_timeout: 600                         # seconds, before giving up waiting for a slow local model
+
 anthropic:
-  api_key: "sk-ant-..."
+  api_key: "sk-ant-..."                       # only needed when provider: anthropic
 
 candidate:
   name: "Jane Doe"
@@ -9,7 +16,7 @@ candidate:
 
 pipeline:
   threshold: 60                # minimum score (0-100) to generate outputs
-  model: "claude-sonnet-4-6"
+  model: "claude-sonnet-4-6"   # model used when llm.provider: anthropic
   top_stories: 3               # number of top STAR stories passed to each prompt
   resume_word_count_min: 500   # resume_matcher flags the resume as under/over target outside this range
   resume_word_count_max: 700

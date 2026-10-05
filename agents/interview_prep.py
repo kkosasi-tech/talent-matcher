@@ -1,6 +1,5 @@
 from pathlib import Path
-import anthropic
-from config import get_anthropic_api_key, get_model
+from llm import chat
 from models.schemas import InterviewPrep, InterviewQuestion, MatchResult, Score
 from models.utils import parse_json_response
 
@@ -67,8 +66,6 @@ def generate_interview_prep(
         resume_path = Path(__file__).parent.parent / "data" / "resume.md"
 
     resume_text = resume_path.read_text()
-    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
-
     top_stories = "\n".join(
         f"- {s.story_title}: {s.star_summary}"
         for s in match.top_stories
@@ -86,25 +83,16 @@ def generate_interview_prep(
         resume_text=resume_text,
     )
 
-    with client.messages.stream(
-        model=get_model(),
-        max_tokens=8096,
+    response = chat(
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        response = stream.get_final_message()
+        max_tokens=8096,
+    )
 
-    if response.stop_reason == "max_tokens":
+    if response.truncated:
         print("    WARNING: interview_prep response was truncated (hit max_tokens)")
 
-    text_blocks = [b for b in response.content if b.type == "text"]
-    if not text_blocks:
-        raise RuntimeError(
-            f"interview_prep got no text block. stop_reason={response.stop_reason!r}, "
-            f"content types={[b.type for b in response.content]}"
-        )
-
-    data = parse_json_response(text_blocks[0].text)
+    data = parse_json_response(response.text)
     questions = [InterviewQuestion(**q) for q in data["questions"]]
     return InterviewPrep(
         role=data["role"],

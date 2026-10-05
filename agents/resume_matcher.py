@@ -16,9 +16,9 @@ being wrongly flagged as missing just because the resume doesn't mention them.
 import re
 from pathlib import Path
 
-import anthropic
 import yaml
-from config import get_anthropic_api_key, get_model, get_resume_word_count_range
+from config import get_resume_word_count_range
+from llm import chat
 from models.schemas import CategoryMatch, MatchReport, ParsedJD, RecoverableSkill
 from models.utils import parse_json_response
 
@@ -101,8 +101,6 @@ def match_resume(
     word_min, word_max = get_resume_word_count_range()
     stories = _load_stories(bank_path)
 
-    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
-
     prompt = PROMPT.format(
         role=jd.role,
         company=jd.company,
@@ -114,25 +112,16 @@ def match_resume(
         stories_yaml=yaml.dump(stories, default_flow_style=False),
     )
 
-    with client.messages.stream(
-        model=get_model(),
-        max_tokens=4096,
+    response = chat(
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        response = stream.get_final_message()
+        max_tokens=4096,
+    )
 
-    if response.stop_reason == "max_tokens":
+    if response.truncated:
         print("    WARNING: resume_matcher response was truncated (hit max_tokens)")
 
-    text_blocks = [b for b in response.content if b.type == "text"]
-    if not text_blocks:
-        raise RuntimeError(
-            f"resume_matcher got no text block. stop_reason={response.stop_reason!r}, "
-            f"content types={[b.type for b in response.content]}"
-        )
-
-    data = parse_json_response(text_blocks[0].text)
+    data = parse_json_response(response.text)
     stories_by_id = {s["id"]: s for s in stories}
 
     def _enrich_recoverable(r: dict) -> dict:

@@ -1,8 +1,7 @@
 from datetime import date
 from pathlib import Path
-import anthropic
 from jinja2 import Environment, FileSystemLoader
-from config import get_anthropic_api_key, get_model
+from llm import chat
 from models.schemas import MatchResult, Score, CoverLetterSlots, CoverLetterContext
 from models.utils import parse_json_response
 
@@ -33,8 +32,6 @@ Respond ONLY with the JSON object."""
 
 
 def _generate_slots(match: MatchResult, score: Score) -> CoverLetterSlots:
-    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
-
     star_stories = "\n".join(
         f"- {s.story_title} [{s.relevance_score:.2f}]: {s.star_summary}"
         for s in match.top_stories
@@ -49,25 +46,16 @@ def _generate_slots(match: MatchResult, score: Score) -> CoverLetterSlots:
         score_rationale=score.rationale,
     )
 
-    with client.messages.stream(
-        model=get_model(),
-        max_tokens=2048,
+    response = chat(
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        response = stream.get_final_message()
+        max_tokens=2048,
+    )
 
-    if response.stop_reason == "max_tokens":
+    if response.truncated:
         print("    WARNING: cover_letter response was truncated (hit max_tokens)")
 
-    text_blocks = [b for b in response.content if b.type == "text"]
-    if not text_blocks:
-        raise RuntimeError(
-            f"cover_letter got no text block. stop_reason={response.stop_reason!r}, "
-            f"content types={[b.type for b in response.content]}"
-        )
-
-    data = parse_json_response(text_blocks[0].text)
+    data = parse_json_response(response.text)
     return CoverLetterSlots(**data)
 
 

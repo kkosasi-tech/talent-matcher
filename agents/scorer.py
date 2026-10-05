@@ -1,5 +1,4 @@
-import anthropic
-from config import get_anthropic_api_key, get_model
+from llm import chat
 from models.schemas import MatchReport, MatchResult, Score
 from models.utils import parse_json_response
 
@@ -48,8 +47,6 @@ Respond ONLY with the JSON object."""
 
 
 def score_match(match: MatchResult, match_report: MatchReport, threshold: int = THRESHOLD) -> Score:
-    client = anthropic.Anthropic(api_key=get_anthropic_api_key())
-
     story_summaries = "\n".join(
         f"- [{s.relevance_score:.2f}] {s.story_title}: {s.star_summary}"
         for s in match.top_stories
@@ -82,25 +79,16 @@ def score_match(match: MatchResult, match_report: MatchReport, threshold: int = 
         accomplishments_notes=match_report.accomplishments_notes,
     )
 
-    with client.messages.stream(
-        model=get_model(),
-        max_tokens=1024,
+    response = chat(
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        response = stream.get_final_message()
+        max_tokens=1024,
+    )
 
-    if response.stop_reason == "max_tokens":
+    if response.truncated:
         print("    WARNING: scorer response was truncated (hit max_tokens)")
 
-    text_blocks = [b for b in response.content if b.type == "text"]
-    if not text_blocks:
-        raise RuntimeError(
-            f"scorer got no text block. stop_reason={response.stop_reason!r}, "
-            f"content types={[b.type for b in response.content]}"
-        )
-
-    data = parse_json_response(text_blocks[0].text)
+    data = parse_json_response(response.text)
     data["proceed"] = data["overall"] >= threshold
     data["missing_skills"] = match_report.missing_skills
     return Score(**data)
