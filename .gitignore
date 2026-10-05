@@ -32,3 +32,7 @@ Thumbs.db
 # Misc
 *.log
 uv.lock
+
+# Personal run inputs (use urls.example.txt / a sample JD instead)
+urls.txt
+jd.txt
