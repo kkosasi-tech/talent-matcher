@@ -126,13 +126,16 @@ def _fetch_ashby(url: str, parsed) -> FetchedJob:
 
 def _fetch_smartrecruiters(url: str, parsed) -> FetchedJob:
     parts = [p for p in parsed.path.split("/") if p]
-    if len(parts) < 2:
-        raise FetchError("unrecognised SmartRecruiters URL shape")
-    company = parts[0]
-    m = re.match(r"(\d+)", parts[1])
+    m = re.search(r"(\d+)$", parts[-1]) if parts else None
     if not m:
-        raise FetchError("no posting id in SmartRecruiters URL")
-    data = _get_json(f"https://api.smartrecruiters.com/v1/companies/{company}/postings/{m.group(1)}")
+        for p in reversed(parts):
+            m = re.search(r"(\d+)$", p)
+            if m:
+                break
+    if not m:
+        raise FetchError("no posting id found in SmartRecruiters URL")
+    posting_id, company = (m.group(1), parts[0]) if parts else (m.group(1), "")
+    data = _get_json(f"https://api.smartrecruiters.com/v1/companies/{company}/postings/{posting_id}")
     sections = []
     for sec in (data.get("jobAd") or {}).get("sections", {}).values():
         if isinstance(sec, dict):

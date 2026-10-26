@@ -89,6 +89,12 @@ def score_match(match: MatchResult, match_report: MatchReport, threshold: int = 
         print("    WARNING: scorer response was truncated (hit max_tokens)")
 
     data = parse_json_response(response.text)
-    data["proceed"] = data["overall"] >= threshold
+    try:
+        overall = int(data["overall"])
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"scorer returned no valid 'overall' score: {data.get('overall')!r}") from e
+    data["overall"] = overall
+    data.setdefault("rationale", "")
+    data["proceed"] = overall >= threshold
     data["missing_skills"] = match_report.missing_skills
     return Score(**data)
