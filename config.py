@@ -43,7 +43,9 @@ def get_model() -> str:
 
 
 def get_llm_provider() -> str:
-    provider = (load_config().get("llm", {}).get("provider") or "anthropic").lower()
+    provider = (os.environ.get("LLM_PROVIDER")
+                or load_config().get("llm", {}).get("provider")
+                or "anthropic").lower()
     if provider not in ("anthropic", "ollama"):
         raise ValueError(
             f"llm.provider must be 'anthropic' or 'ollama', got {provider!r}"
@@ -52,6 +54,11 @@ def get_llm_provider() -> str:
 
 
 def get_ollama_base_url() -> str:
+    # OLLAMA_HOST (the standard Ollama env var) wins over config; it may be
+    # bare "host:port" or a full URL.
+    env_url = os.environ.get("OLLAMA_HOST")
+    if env_url:
+        return (env_url if "://" in env_url else f"http://{env_url}").rstrip("/")
     return load_config().get("llm", {}).get(
         "ollama_base_url", _DEFAULT_OLLAMA_BASE_URL
     ).rstrip("/")
