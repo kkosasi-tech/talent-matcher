@@ -74,6 +74,7 @@ def match_stories(jd: ParsedJD, bank_path: Path | None = None, top_n: int = 3) -
             role=source.get("role") or "",
             year=str(source.get("year") or ""),
         ))
+    matches.sort(key=lambda s: s.relevance_score, reverse=True)
     top_stories = matches[:top_n]
 
     return MatchResult(jd=jd, matches=matches, top_stories=top_stories)
