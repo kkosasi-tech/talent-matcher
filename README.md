@@ -60,6 +60,8 @@ llm:
   ollama_timeout: 600        # seconds, for slow local models
 ```
 
+Per-run overrides (no config edit needed): `LLM_PROVIDER=ollama`, `OLLAMA_MODEL=qwen2.5:7b`, `OLLAMA_HOST=localhost:11434` — the standard Ollama env vars are honored.
+
 With the **Anthropic API** provider (default), the key is read from the `ANTHROPIC_API_KEY` environment variable (recommended) or from `anthropic.api_key` in `config.yaml` as a fallback:
 
 ```bash
